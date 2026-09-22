@@ -1388,7 +1388,7 @@ static bool mkdatabaseAccu(string_view sensordir,string_view sensorgegs,uint32_t
 #endif
 #ifdef DEXCOM
 static bool mkdatabaseDex(string_view sensordir,string_view sensorgegs,uint32_t now,uint8_t days) {
-   LOGGER("mkdatabaseDex %s,%s\n",sensordir.data(),sensorgegs.data());
+   LOGGER("mkdatabaseDex %s,%s days=%d\n",sensordir.data(),sensorgegs.data(),(int)days);
     mkdir(sensordir.data(),0700);
     pathconcat infoname(sensordir,infopdat);
     if(access(infoname,F_OK)!=-1)  {

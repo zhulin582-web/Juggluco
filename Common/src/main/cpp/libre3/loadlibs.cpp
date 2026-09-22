@@ -404,3 +404,24 @@ fromjava(libre3ExportSavedAuthorization)(JNIEnv *env, jclass, jlong context) {
 
 extern bool libre3initialized;
 bool libre3initialized = true;
+
+extern "C" JNIEXPORT jbyteArray JNICALL
+fromjava(libre3EmulatorDecryptReply)(JNIEnv *env, jclass, jlong context,
+                                    jbyteArray nonce, jbyteArray ciphertext) {
+    auto *security = security_context_from_handle(context);
+    ByteArrayView n{env, nonce, 7}, c{env, ciphertext, 40};
+    if (!security || !n.valid() || !c.valid()) return nullptr;
+    return make_fixed_byte_array<36>(env, [&](std::uint8_t *out) {
+        return l3_app_core_emulator_decrypt_reply(&security->core, n.data(), c.data(), out);
+    });
+}
+extern "C" JNIEXPORT jbyteArray JNICALL
+fromjava(libre3EmulatorEncryptResponse)(JNIEnv *env, jclass, jlong context,
+                                       jbyteArray nonce, jbyteArray plaintext) {
+    auto *security = security_context_from_handle(context);
+    ByteArrayView n{env, nonce, 7}, p{env, plaintext, 56};
+    if (!security || !n.valid() || !p.valid()) return nullptr;
+    return make_fixed_byte_array<60>(env, [&](std::uint8_t *out) {
+        return l3_app_core_emulator_encrypt_response(&security->core, n.data(), p.data(), out);
+    });
+}

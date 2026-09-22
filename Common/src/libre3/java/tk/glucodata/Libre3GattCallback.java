@@ -613,6 +613,7 @@ private int commandphase=1;
 private void setCertificate140() {
     {if(doLog) {Log.i(LOG_ID, SerialNumber + ": "+"setCertificate140");};};
     cryptolib.setPatchCertificate(securityContext,rdtData);
+    Libre3Emulator.captureCertificate(SerialNumber,rdtData);
     if(sendSecurityCommand( (byte)0x0D)) {
         commandphase=4;
         }

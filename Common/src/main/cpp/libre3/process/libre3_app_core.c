@@ -491,22 +491,22 @@ static void make_ccm_block(
     block[15] = final_byte;
 }
 
-static int ccm_encrypt36(
+static int ccm_encrypt_short(
     const l3_app_core *core,
     const uint8_t nonce7[L3_LEN_CHALLENGE_NONCE],
-    const uint8_t plain36[L3_LEN_CHALLENGE_REPLY_PLAIN],
-    uint8_t out40[L3_LEN_CHALLENGE_REPLY_CRYPT]) {
+    const uint8_t *plain36,
+    uint8_t *out40, unsigned plain_len) {
     uint8_t block[16];
     uint8_t mac[16];
     uint8_t stream[16];
 
     /* M=4, L=8, no associated data. */
-    make_ccm_block(block, 0x0fu, nonce7, L3_LEN_CHALLENGE_REPLY_PLAIN);
+    make_ccm_block(block, 0x0fu, nonce7, plain_len);
     if (!encrypt_challenge_block(core, block, mac)) return 0;
 
-    for (unsigned offset = 0u; offset < L3_LEN_CHALLENGE_REPLY_PLAIN;
+    for (unsigned offset = 0u; offset < plain_len;
          offset += 16u) {
-        const unsigned remaining = L3_LEN_CHALLENGE_REPLY_PLAIN - offset;
+        const unsigned remaining = plain_len - offset;
         const unsigned count = remaining < 16u ? remaining : 16u;
         memset(block, 0, sizeof(block));
         memcpy(block, plain36 + offset, count);
@@ -515,9 +515,9 @@ static int ccm_encrypt36(
     }
 
     for (unsigned offset = 0u, counter = 1u;
-         offset < L3_LEN_CHALLENGE_REPLY_PLAIN;
+         offset < plain_len;
          offset += 16u, ++counter) {
-        const unsigned remaining = L3_LEN_CHALLENGE_REPLY_PLAIN - offset;
+        const unsigned remaining = plain_len - offset;
         const unsigned count = remaining < 16u ? remaining : 16u;
         make_ccm_block(block, 0x07u, nonce7, (uint8_t)counter);
         if (!encrypt_challenge_block(core, block, stream)) return 0;
@@ -529,29 +529,29 @@ static int ccm_encrypt36(
     make_ccm_block(block, 0x07u, nonce7, 0u);
     if (!encrypt_challenge_block(core, block, stream)) return 0;
     for (unsigned i = 0u; i < 4u; ++i) {
-        out40[L3_LEN_CHALLENGE_REPLY_PLAIN + i] =
+        out40[plain_len + i] =
             (uint8_t)(mac[i] ^ stream[i]);
     }
     return 1;
 }
 
-static int ccm_decrypt56(
+static int ccm_decrypt_short(
     const l3_app_core *core,
     const uint8_t nonce7[L3_LEN_CHALLENGE_NONCE],
-    const uint8_t cipher60[L3_LEN_CHALLENGE_RESPONSE_CRYPT],
-    uint8_t out56[L3_LEN_CHALLENGE_RESPONSE_PLAIN]) {
+    const uint8_t *cipher60,
+    uint8_t *out56, unsigned plain_len) {
     uint8_t block[16];
     uint8_t mac[16];
     uint8_t stream[16];
 
     make_ccm_block(block, 0x0fu, nonce7,
-                   L3_LEN_CHALLENGE_RESPONSE_PLAIN);
+                   plain_len);
     if (!encrypt_challenge_block(core, block, mac)) return 0;
 
     for (unsigned offset = 0u, counter = 1u;
-         offset < L3_LEN_CHALLENGE_RESPONSE_PLAIN;
+         offset < plain_len;
          offset += 16u, ++counter) {
-        const unsigned remaining = L3_LEN_CHALLENGE_RESPONSE_PLAIN - offset;
+        const unsigned remaining = plain_len - offset;
         const unsigned count = remaining < 16u ? remaining : 16u;
         make_ccm_block(block, 0x07u, nonce7, (uint8_t)counter);
         if (!encrypt_challenge_block(core, block, stream)) return 0;
@@ -571,10 +571,10 @@ static int ccm_decrypt56(
     uint8_t diff = 0u;
     for (unsigned i = 0u; i < 4u; ++i) {
         diff |= (uint8_t)((mac[i] ^ stream[i]) ^
-                          cipher60[L3_LEN_CHALLENGE_RESPONSE_PLAIN + i]);
+                          cipher60[plain_len + i]);
     }
     if (diff != 0u) {
-        secure_zero(out56, L3_LEN_CHALLENGE_RESPONSE_PLAIN);
+        secure_zero(out56, plain_len);
         return 0;
     }
     return 1;
@@ -593,7 +593,7 @@ int l3_app_core_encrypt_challenge_reply_into(
         return L3_SECURITY_ERR_ARGUMENT;
     }
     if (!core_is_authorized(core)) return L3_SECURITY_ERR_STATE;
-    return ccm_encrypt36(core, nonce7, plain36, out40)
+    return ccm_encrypt_short(core, nonce7, plain36, out40, L3_LEN_CHALLENGE_REPLY_PLAIN)
                ? 1 : L3_SECURITY_ERR_ENGINE;
 }
 
@@ -610,8 +610,25 @@ int l3_app_core_decrypt_challenge_response_into(
         return L3_SECURITY_ERR_ARGUMENT;
     }
     if (!core_is_authorized(core)) return L3_SECURITY_ERR_STATE;
-    return ccm_decrypt56(core, nonce7, cipher60, out56)
+    return ccm_decrypt_short(core, nonce7, cipher60, out56, L3_LEN_CHALLENGE_RESPONSE_PLAIN)
                ? 1 : L3_SECURITY_ERR_ENGINE;
+}
+
+/* Sensor-side inverse operations. They use the same authorization root and
+ * authenticated CCM framing as the existing client, with the opposite lengths. */
+int l3_app_core_emulator_decrypt_reply(l3_app_core *core,
+    const uint8_t nonce7[7], const uint8_t cipher40[40], uint8_t plain36[36]) {
+    if (!core || !nonce7 || !cipher40 || !plain36) return L3_SECURITY_ERR_ARGUMENT;
+    if (!core_is_authorized(core)) return L3_SECURITY_ERR_STATE;
+    return ccm_decrypt_short(core, nonce7, cipher40, plain36, 36u)
+        ? 1 : L3_SECURITY_ERR_ENGINE;
+}
+int l3_app_core_emulator_encrypt_response(l3_app_core *core,
+    const uint8_t nonce7[7], const uint8_t plain56[56], uint8_t cipher60[60]) {
+    if (!core || !nonce7 || !plain56 || !cipher60) return L3_SECURITY_ERR_ARGUMENT;
+    if (!core_is_authorized(core)) return L3_SECURITY_ERR_STATE;
+    return ccm_encrypt_short(core, nonce7, plain56, cipher60, 56u)
+        ? 1 : L3_SECURITY_ERR_ENGINE;
 }
 
 int l3_app_core_export_challenge_context_into(

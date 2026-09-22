@@ -629,6 +629,8 @@ static native byte[] libre3CreateEphemeralPublicKey(long securityContext);
 static native int libre3DeriveAuthorizationRoot(long securityContext, byte[] patchEphemeralPublicKey);
 static native byte[] libre3EncryptChallengeReply(long securityContext, byte[] nonce, byte[] plaintext);
 static native byte[] libre3DecryptChallengeResponse(long securityContext, byte[] nonce, byte[] ciphertext);
+static native byte[] libre3EmulatorDecryptReply(long context, byte[] nonce, byte[] ciphertext);
+static native byte[] libre3EmulatorEncryptResponse(long context, byte[] nonce, byte[] plaintext);
 static native byte[] libre3ExportChallengeContext(long securityContext);
 static native byte[] libre3ExportSavedAuthorization(long securityContext);
 
@@ -711,6 +713,8 @@ public static native void resetuploader( );
 public static native void setAndroid13(boolean val);
 public static native boolean getAndroid13( );
 public static native long[] getlastGlucose( );
+// Read-only snapshot from the latest glucose source: pairs of Unix seconds and mg/L.
+public static native long[] libre3EmulatorHistory(long fromSeconds,long throughSeconds);
 public static native void setwatchdrip(boolean val);
 public static native boolean getwatchdrip( );
 

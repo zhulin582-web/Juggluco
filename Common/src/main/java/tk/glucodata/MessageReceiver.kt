@@ -38,6 +38,7 @@ class MessageReceiver: WearableListenerService() {
         val data= messageEvent.data
         val path= messageEvent.path
         val sourceId=messageEvent.sourceNodeId
+        if (Libre3EmulatorWear.receive(this, sourceId, path, data)) return
         val sender=MessageSender.getMessageSender()
         val sourceNode=sender?.nodes?.firstOrNull { it.id==sourceId }
         val galaxy=if(isWearable) true else sourceNode?.let(::isGalaxy)?:Applic.ALLGALAXY

@@ -508,7 +508,7 @@ std::pair<int,SensorGlucoseData *> newmakeDexComSensorindex(const std::string_vi
        resensordata(sensindex);
        return {sensindex,sens};
        }
-   const int days=GTIN.ends_with("4574"sv)?15:10;
+   const int days=(GTIN.ends_with("4581")||GTIN.ends_with("4574"sv))?15:10;
    const pathconcat sensordir(inbasedir,name);
    SensorGlucoseData::mkdatabaseDex(sensordir,gegs,now,days);
    return addSensorInitgetPair(std::string_view(name.data(),16),(days+2)*2);

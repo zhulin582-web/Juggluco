@@ -28,6 +28,8 @@
 // Created by jka on 27-11-20.
 //
 #include <cinttypes>
+#include <cmath>
+#include <vector>
 #include <jni.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -1037,6 +1039,26 @@ extern "C" JNIEXPORT jlongArray JNICALL   fromjava(getlastGlucose)(JNIEnv *env, 
         }
     return nullptr;
     }
+// Snapshot saved stream readings without opening a sensor connection or changing
+// its receive/backfill cursors. Java maps timestamps onto the emulator timeline.
+extern "C" JNIEXPORT jlongArray JNICALL fromjava(libre3EmulatorHistory)(JNIEnv *env,jclass,jlong from,jlong through) {
+    if(from<0 || through<from) return env->NewLongArray(0);
+    std::vector<jlong> values;
+    if(const auto [hist,index]=getlaststream(time(nullptr));hist) {
+        auto calibrate=make_calibrator<ScanData>(hist);
+        for(const auto &item:hist->getPolldata()) {
+            if(!item.valid() || item.gettime()<from || item.gettime()>through) continue;
+            const double calibrated=calibrate.calibrateONEtest(item);
+            const double mgL=isnan(calibrated)?item.getmgdL()*10.0:round(calibrated*10.0);
+            if(!std::isfinite(mgL) || mgL<390 || mgL>5010) continue;
+            values.push_back(item.gettime()); values.push_back(static_cast<jlong>(mgL));
+            if(values.size()>=32768*2) break;
+        }
+    }
+    jlongArray result=env->NewLongArray(static_cast<jsize>(values.size()));
+    if(result && !values.empty()) env->SetLongArrayRegion(result,0,static_cast<jsize>(values.size()),values.data());
+    return result;
+}
 jlong glucoseback(uint32_t nu,uint32_t glval,float drate,SensorGlucoseData *hist) {
         if(!glval) return 0LL;
         hist->setbluetoothOn(1);

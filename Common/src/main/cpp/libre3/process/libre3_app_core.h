@@ -163,6 +163,12 @@ int l3_app_core_export_challenge_context_into(
     const l3_app_core *core,
     uint8_t out176[L3_LEN_CHALLENGE_CONTEXT]);
 
+/* Sensor emulator: inverse of the client challenge operations. */
+int l3_app_core_emulator_decrypt_reply(l3_app_core *core,
+    const uint8_t nonce7[7], const uint8_t cipher40[40], uint8_t plain36[36]);
+int l3_app_core_emulator_encrypt_response(l3_app_core *core,
+    const uint8_t nonce7[7], const uint8_t plain56[56], uint8_t cipher60[60]);
+
 size_t l3_app_core_authorization_scratch_size(void);
 size_t l3_app_core_authorization_scratch_alignment(void);
 int l3_app_core_set_authorization_scratch(

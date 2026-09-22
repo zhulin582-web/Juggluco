@@ -521,6 +521,7 @@ static void menuitem(MainActivity act, NumberView numb, int mealptr, int pos, In
            public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
            public void onTextChanged(CharSequence s, int start, int before, int count) { }
           });
+boolean[] done={false};
     Layout lay=new Layout(act,(l,w,h)-> {
         int width=GlucoseCurve.getwidth(act);
         int hei=GlucoseCurve.getheight(act);
@@ -537,6 +538,10 @@ static void menuitem(MainActivity act, NumberView numb, int mealptr, int pos, In
             l.setX(centeredSafeX(width,w));
             l.setY(MainActivity.systembarTop);
             }
+        if(!done[0]) {
+              numshowkeyboard(numb,act,l);
+              done[0]=true;
+              }
         return new int[]{w,h};
         },new View[]{amountlabel,amount},new View[]{ingrlabel,Ingredient},new View[]{carblabel,carbos},new View[]{totallabel,total}, new View[]{mealtotallabel,mealtotal},
             new View[] {Delete,Cancel,Save});
@@ -544,11 +549,12 @@ static void menuitem(MainActivity act, NumberView numb, int mealptr, int pos, In
        lay.setPadding(pad,0,pad,0);
     act.addMyContentView(lay, new ViewGroup.LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
     registerOrientationLayout(act,lay,view->requestMenuItemLayout(view,numb));
+    /*
       lay.post(() -> {
           lay.requestLayout();
           numshowkeyboard(numb,act,lay);
           });
-
+*/
         lay.setBackgroundColor(Applic.backgroundcolor);
 
     Delete.setOnClickListener(v-> {

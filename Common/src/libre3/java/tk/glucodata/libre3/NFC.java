@@ -57,6 +57,7 @@ public static	long   	second(byte[] nfc1,Tag tag,tk.glucodata.GlucoseCurve curve
         System.arraycopy(metcrc, 0, command, secstart.length, metcrc.length);
 	{if(doLog){showbytes("NFC command2: ",command);};}
         var second= AlgNfcV.wholenfccmd(tag,command);
+        tk.glucodata.Libre3Emulator.captureScan(nfc1,second);
         long[] uit={0L};
 	curve.render.sensorid=interpret3NFC2(nfc1,second,nowsec,uit);
         return uit[0];
@@ -64,4 +65,3 @@ public static	long   	second(byte[] nfc1,Tag tag,tk.glucodata.GlucoseCurve curve
 
 
 }
-

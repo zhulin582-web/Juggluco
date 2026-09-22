@@ -102,6 +102,7 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data android:host="*" android:pathPrefix="/libre3-emulator/" android:scheme="wear" />
                 <data android:host="*" android:pathPrefix="/data" android:scheme="wear" />
                 <data android:host="*" android:pathPrefix="/messages" android:scheme="wear" />
                 <data android:host="*" android:pathPrefix="/messagesack" android:scheme="wear" />
