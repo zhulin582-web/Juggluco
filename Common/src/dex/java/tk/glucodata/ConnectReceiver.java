@@ -31,6 +31,7 @@ public class ConnectReceiver extends BroadcastReceiver {
 static final private String LOG_ID="ConnectReceiver";
         @Override
   public void onReceive(Context context, Intent intent) {
+      if(GattRecoveryAlarm.handle(intent)) return;
       var blue=SensorBluetooth.blueone;
       if(blue!=null) {
             String id=intent.getAction();

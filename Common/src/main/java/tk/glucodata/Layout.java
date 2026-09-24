@@ -432,26 +432,16 @@ private void useRowsInLayout(Object[][] inrows,boolean rev,Placer useplacer) {
         focused.requestFocus();
     }
 
-private boolean measureIsPortrait(int widthMeasureSpec,int heightMeasureSpec) {
-    int width=MeasureSpec.getSize(widthMeasureSpec);
-    int height=MeasureSpec.getSize(heightMeasureSpec);
-    if(width>0&&height>0)
-        return height>width;
-
-    width=getWidth();
-    height=getHeight();
-    if(width>0&&height>0)
-        return height>width;
-
+private boolean measureIsPortrait() {
     return getResources().getConfiguration().orientation==
             android.content.res.Configuration.ORIENTATION_PORTRAIT;
     }
 
-private void updateOrientationRows(int widthMeasureSpec,int heightMeasureSpec) {
+private void updateOrientationRows() {
     if(portraitRows==null)
         return;
 
-    boolean portrait=measureIsPortrait(widthMeasureSpec,heightMeasureSpec);
+    boolean portrait=measureIsPortrait();
     if(!rowsDirty&&portrait==portraitActive)
         return;
 
@@ -768,7 +758,7 @@ boolean useMatch=false;
 @Override
 protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
    //Log.i(LOG_ID,"onMeasure "+widthMeasureSpec);
-   updateOrientationRows(widthMeasureSpec,heightMeasureSpec);
+   updateOrientationRows();
    int[] res=domeasure(widthMeasureSpec, heightMeasureSpec);
  
     if(useMatch) {

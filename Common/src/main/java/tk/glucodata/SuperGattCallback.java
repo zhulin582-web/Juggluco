@@ -351,7 +351,7 @@ static private int low(long tim,notGlucose    sglucose,float gl,float rate,int a
         if(gl==0.0)
             return;
         if(BuildConfig.libreVersion==3 && android.os.Build.VERSION.SDK_INT>=26)
-            Libre3EmulatorService.glucoseAvailable(timmsec,mgdl,rate);
+            Libre3EmulatorService.glucoseAvailable();
         if(glucosealarms == null) {
             Log.e(LOG_ID,"glucosealarms==null");
             return;

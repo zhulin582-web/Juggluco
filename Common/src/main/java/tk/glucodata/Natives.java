@@ -713,8 +713,10 @@ public static native void resetuploader( );
 public static native void setAndroid13(boolean val);
 public static native boolean getAndroid13( );
 public static native long[] getlastGlucose( );
-// Read-only snapshot from the latest glucose source: pairs of Unix seconds and mg/L.
+// Uncalibrated records: Unix seconds, mg/L, rate*100, Libre 3 minute (-1 otherwise), source start.
 public static native long[] libre3EmulatorHistory(long fromSeconds,long throughSeconds);
+public static native long[] libre3EmulatorStream(long fromSeconds,long throughSeconds);
+public static native long[] libre3EmulatorLatest();
 public static native void setwatchdrip(boolean val);
 public static native boolean getwatchdrip( );
 

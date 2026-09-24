@@ -447,103 +447,9 @@ void nogatts(MainActivity act) {
    }
    */
 
-private static void setGridPositionById(View root, int id, int column, int row, int columnSpan) {
-    setGridPosition(root.findViewById(id), column, row, columnSpan, 1);
-}
-
-private static void setGridPositionById(View root, int id, int column, int row, int columnSpan, int rowSpan) {
-    setGridPosition(root.findViewById(id), column, row, columnSpan, rowSpan);
-}
-
-private static void setGridPosition(View child, int column, int row, int columnSpan) {
-    setGridPosition(child,column,row,columnSpan,1);
-}
-
-private static void setGridPosition(View child, int column, int row, int columnSpan, int rowSpan) {
-    if(child == null)
-        return;
-    ViewGroup.LayoutParams base = child.getLayoutParams();
-    if(!(base instanceof GridLayout.LayoutParams))
-        return;
-    GridLayout.LayoutParams params = (GridLayout.LayoutParams)base;
-    params.columnSpec = GridLayout.spec(column, columnSpan);
-    params.rowSpec = GridLayout.spec(row, rowSpan);
-    child.setLayoutParams(params);
-}
-
-private static void setTextMaxWidth(View root, int width, int... ids) {
-    for(int id : ids) {
-        View child = root.findViewById(id);
-        if(child instanceof TextView)
-            ((TextView)child).setMaxWidth(width);
-    }
-}
-
-private static void setGridWidthById(View root, int id, int width) {
-    View child = root.findViewById(id);
-    if(child == null)
-        return;
-    ViewGroup.LayoutParams base = child.getLayoutParams();
-    if(!(base instanceof GridLayout.LayoutParams))
-        return;
-    GridLayout.LayoutParams params = (GridLayout.LayoutParams)base;
-    params.width=width;
-    child.setLayoutParams(params);
-}
-
-private static void setGridMargins(View child, int left, int top, int right, int bottom) {
-    if(child == null)
-        return;
-    ViewGroup.LayoutParams base=child.getLayoutParams();
-    if(!(base instanceof GridLayout.LayoutParams))
-        return;
-    GridLayout.LayoutParams params=(GridLayout.LayoutParams)base;
-    params.setMargins(left,top,right,bottom);
-    child.setLayoutParams(params);
-}
-
-private static void setGridMarginsById(View root, int id, int left, int top, int right, int bottom) {
-    setGridMargins(root.findViewById(id),left,top,right,bottom);
-}
-
-private static void setDiagnosticColumnWidths(View root, int labelWidth, int successWidth,
-                                               int failureWidth) {
-    int[] labels={R.id.stage,R.id.connection,R.id.disconnectsensor};
-    for(int id:labels)
-        setGridWidthById(root,id,labelWidth);
-    View glucoseLabel=root.findViewWithTag("bluesensor_glucose_label");
-    if(glucoseLabel!=null) {
-        ViewGroup.LayoutParams base=glucoseLabel.getLayoutParams();
-        if(base instanceof GridLayout.LayoutParams) {
-            GridLayout.LayoutParams params=(GridLayout.LayoutParams)base;
-            params.width=labelWidth;
-            glucoseLabel.setLayoutParams(params);
-        }
-    }
-
-    int[] successes={R.id.textView2,R.id.consuccess,R.id.keysuccess,R.id.glucosesuccess};
-    for(int id:successes)
-        setGridWidthById(root,id,successWidth);
-
-    int[] failures={R.id.textView3,R.id.confail,R.id.keyfailure,R.id.glucosefailure};
-    for(int id:failures)
-        setGridWidthById(root,id,failureWidth);
-}
-
-private static void setGridContainerWidth(GridLayout grid, int width) {
-    if(grid==null)
-        return;
-    ViewGroup.LayoutParams params=grid.getLayoutParams();
-    if(params!=null && params.width!=width) {
-        params.width=width;
-        grid.setLayoutParams(params);
-    }
-}
-
 private static boolean phonePortrait(View view) {
-    // Prefer the live visible window.  MainActivity deliberately survives
-    // rotation, so cached/configuration dimensions can briefly still describe
-    // the previous orientation.
+    // The overlay itself is not recreated when MainActivity handles rotation.
+    // Prefer the current visible window and use Configuration as fallback.
     if(view!=null) {
         View root=view.getRootView();
         if(root!=null && root.getWidth()>0 && root.getHeight()>0) {
@@ -554,34 +460,16 @@ private static boolean phonePortrait(View view) {
             return root.getHeight()>root.getWidth();
         }
     }
-    int width=GlucoseCurve.getwidth();
-    int height=GlucoseCurve.getheight();
-    if(width>0 && height>0)
-        return height>width;
-    int orientation=view.getResources().getConfiguration().orientation;
-    return orientation==android.content.res.Configuration.ORIENTATION_PORTRAIT;
-}
-
-private static int visibleWindowWidth(View view) {
-    if(view==null)
-        return 0;
-    View root=view.getRootView();
-    if(root==null || root.getWidth()<=0)
-        return 0;
-    android.graphics.Rect visible=new android.graphics.Rect();
-    root.getWindowVisibleDisplayFrame(visible);
-    int width=visible.width();
-    return width>0?width:root.getWidth();
+    return view.getResources().getConfiguration().orientation==
+            android.content.res.Configuration.ORIENTATION_PORTRAIT;
 }
 
 /*
  * Do not reuse MainActivity.systembarLeft/... here.  Those values can still
  * describe the previous orientation while this overlay remains alive.  The
- * visible display frame belongs to the window in its current orientation and
- * therefore gives us fresh insets after every rotation, including API 21.
+ * visible display frame belongs to the window in its current orientation.
  */
-private static void updatePhoneOverlayParams(View view, FrameLayout.LayoutParams params,
-                                             boolean portrait) {
+private static void updatePhoneOverlayParams(View view, FrameLayout.LayoutParams params, boolean portrait) {
     if(view==null || params==null)
         return;
     View root=view.getRootView();
@@ -598,14 +486,9 @@ private static void updatePhoneOverlayParams(View view, FrameLayout.LayoutParams
     int right=Math.max(0,location[0]+root.getWidth()-visible.right);
     int bottom=Math.max(0,location[1]+root.getHeight()-visible.bottom);
 
-    int newWidth=portrait?MATCH_PARENT:WRAP_CONTENT;
-
-    /*
-     * In portrait make the overlay only as tall as its content when the whole
-     * dialog fits.  If it is taller than the current visible window, cap the
-     * viewport at the available height so the outer ScrollView can scroll.
-     * This avoids a large unused black area below the last row.
-     */
+    // Use all available phone width in both orientations.  In landscape this
+    // normally makes the complete diagnostics table visible without scrolling.
+    int newWidth=MATCH_PARENT;
     int newHeight=WRAP_CONTENT;
     if(portrait) {
         int availableHeight=Math.max(1,visible.height());
@@ -625,11 +508,6 @@ private static void updatePhoneOverlayParams(View view, FrameLayout.LayoutParams
             newHeight=availableHeight;
     }
 
-    /*
-     * In portrait use the real current insets, not a fraction of them.  This
-     * guarantees that the first row starts below the status/system bar.
-     * Landscape keeps the old compact margin behaviour.
-     */
     int newLeft=portrait?left:(int)(left*.3f);
     int newTop=portrait?top:(int)(top*.3f);
     int newRight=portrait?right:(int)(right*.3f);
@@ -652,273 +530,8 @@ private static void updatePhoneOverlayParams(View view, FrameLayout.LayoutParams
     }
 }
 
-/*
- * bluesensor.xml is laid out for landscape.  On phones/tablets we keep the
- * same View objects alive and only rewrite the GridLayout coordinates when
- * the window changes between landscape and portrait.  The wearable resource
- * is deliberately never passed here.
- */
-private static void setPhoneSensorLayout(View root, boolean portrait, int availableWidth) {
-    GridLayout grid = root.findViewById(R.id.grid);
-    if(grid == null)
-        return;
-
-    View streamHistory = root.findViewById(R.id.streamhistory);
-    View sensorAction = streamHistory != null && streamHistory.getParent() instanceof View ?
-                        (View)streamHistory.getParent() : null;
-    View diagnosticScroll=root.findViewById(R.id.diagnosticscroll);
-    GridLayout diagnosticGrid=root.findViewById(R.id.diagnosticgrid);
-
-    if(portrait) {
-        /*
-         * Keep only the diagnostic table horizontally scrollable.  The main
-         * portrait grid itself is fixed to the available screen width, so the
-         * outer HorizontalScrollView has no horizontal range and does not
-         * compete with diagnosticscroll for gestures.
-         */
-        grid.setRowCount(12);
-
-        setGridPositionById(root,R.id.bluestate,           0, 0,6);
-        setGridPositionById(root,R.id.info,                0, 1,3);
-        setGridPositionById(root,R.id.finish,              3, 1,3);
-        setGridPosition(sensorAction,                      0, 2,6);
-        setGridPositionById(root,R.id.locationpermission,  0, 3,6);
-
-        setGridPositionById(root,R.id.scan,                0, 4,6);
-
-        // Sensor selector and address belong together.  In portrait keep the
-        // selector at the left and show the selected device address at right.
-        setGridPositionById(root,R.id.sensors,             0, 5,3);
-        setGridPositionById(root,R.id.deviceaddress,       3, 5,3);
-
-        // RSSI is short status text and fits naturally to the right of Forget.
-        setGridPositionById(root,R.id.forget,              0, 6,3);
-        setGridPositionById(root,R.id.rssi,                3, 6,3);
-
-        setGridPositionById(root,R.id.streaming,           0, 7,3);
-        setGridPositionById(root,R.id.clear,               3, 7,3);
-
-        setGridPosition(diagnosticScroll,                  0, 8,6);
-
-        setGridPositionById(root,R.id.help,                0, 9,3);
-        setGridPositionById(root,R.id.usebluetooth,        3, 9,3);
-        setGridPositionById(root,R.id.background,          0,10,3);
-        setGridPositionById(root,R.id.priority,            3,10,3);
-        setGridPositionById(root,R.id.android13,           0,11,3);
-        setGridPositionById(root,R.id.close,               3,11,3);
-
-        // All direct children of the main grid now fit columns 0..5.
-        grid.setColumnCount(6);
-        setGridContainerWidth(grid,Math.max(1,availableWidth));
-
-        final float density=GlucoseCurve.metrics.density;
-        final int horizontalPadding=(int)(density*22.0f);
-        final int contentWidth=Math.max(1,availableWidth-horizontalPadding);
-        final int halfWidth=contentWidth/2;
-
-        setTextMaxWidth(root,contentWidth,R.id.bluestate,R.id.scan,
-                        R.id.locationpermission);
-
-        setGridWidthById(root,R.id.deviceaddress,halfWidth);
-        setGridWidthById(root,R.id.sensors,halfWidth);
-        setGridWidthById(root,R.id.streaming,halfWidth);
-        setGridWidthById(root,R.id.rssi,halfWidth);
-
-        int[] half={R.id.info,R.id.finish,R.id.forget,R.id.clear,R.id.help,
-                    R.id.usebluetooth,R.id.background,R.id.priority,
-                    R.id.android13,R.id.close};
-        for(int id:half)
-            setGridWidthById(root,id,halfWidth);
-
-        /*
-         * The ScrollView itself stays screen-sized, but its child GridLayout
-         * should be naturally sized.  Do not stretch sparse rows to fill all
-         * vertical space; use explicit spacing where it improves grouping.
-         */
-        if(root instanceof android.widget.ScrollView)
-            ((android.widget.ScrollView)root).setFillViewport(false);
-
-        final int smallGap=(int)(density*4.0f);
-        final int addressGap=(int)(density*9.0f);
-        final int sectionGap=(int)(density*14.0f);
-
-        setGridMarginsById(root,R.id.deviceaddress,0,addressGap,0,addressGap);
-        setGridMarginsById(root,R.id.sensors,0,addressGap,0,addressGap);
-        setGridMarginsById(root,R.id.streaming,0,smallGap,0,smallGap);
-        setGridMarginsById(root,R.id.rssi,0,smallGap,0,smallGap);
-        setGridMargins(diagnosticScroll,0,smallGap,0,sectionGap);
-        setGridMarginsById(root,R.id.help,0,sectionGap,0,0);
-        setGridMarginsById(root,R.id.usebluetooth,0,sectionGap,0,0);
-        if(sensorAction!=null) {
-            ViewGroup.LayoutParams p=sensorAction.getLayoutParams();
-            if(p instanceof GridLayout.LayoutParams) {
-                ((GridLayout.LayoutParams)p).width=contentWidth;
-                sensorAction.setLayoutParams(p);
-            }
-        }
-
-        if(diagnosticScroll!=null) {
-            ViewGroup.LayoutParams p=diagnosticScroll.getLayoutParams();
-            if(p instanceof GridLayout.LayoutParams) {
-                ((GridLayout.LayoutParams)p).width=contentWidth;
-                diagnosticScroll.setLayoutParams(p);
-            }
-            if(diagnosticScroll instanceof HorizontalScrollView) {
-                HorizontalScrollView hs=(HorizontalScrollView)diagnosticScroll;
-                hs.setFillViewport(false);
-                hs.setSmoothScrollingEnabled(false);
-                hs.setHorizontalScrollBarEnabled(Applic.horiScrollbar);
-            }
-        }
-
-        /*
-         * Give the table readable, stable column widths.  It is deliberately
-         * wider than a normal portrait phone; diagnosticscroll, not text
-         * wrapping into tiny columns, is what makes it fit.
-         */
-        final int labelWidth=(int)(145*density);
-        final int successWidth=(int)(175*density);
-        final int failureWidth=(int)(175*density);
-        final int infoWidth=(int)(300*density);
-        setDiagnosticColumnWidths(root,labelWidth,successWidth,failureWidth);
-        int[] infos={R.id.textView4,R.id.constatus,R.id.keyinfo,R.id.glucoseinfo};
-        for(int id:infos)
-            setGridWidthById(root,id,infoWidth);
-        if(diagnosticGrid!=null)
-            setGridContainerWidth(diagnosticGrid,labelWidth+successWidth+failureWidth+infoWidth);
-
-        // Timestamps and their headings must not collapse into vertical text.
-        int[] oneLine={R.id.stage,R.id.textView2,R.id.textView3,
-                       R.id.consuccess,R.id.confail,R.id.keysuccess,R.id.keyfailure,
-                       R.id.glucosesuccess,R.id.glucosefailure};
-        for(int id:oneLine) {
-            View child=root.findViewById(id);
-            if(child instanceof TextView)
-                ((TextView)child).setSingleLine(true);
-        }
-
-        View rssi=root.findViewById(R.id.rssi);
-        if(rssi!=null) {
-            ViewGroup.LayoutParams base=rssi.getLayoutParams();
-            if(base instanceof GridLayout.LayoutParams) {
-                GridLayout.LayoutParams rp=(GridLayout.LayoutParams)base;
-                rp.width=halfWidth;
-                rp.height=WRAP_CONTENT;
-                rp.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
-                rssi.setLayoutParams(rp);
-            }
-            if(rssi instanceof TextView)
-                ((TextView)rssi).setTextSize(14.0f);
-            rssi.setRotation(0.0f);
-        }
-    }
-    else {
-        // Restore the original wide-screen organisation.  The diagnostic
-        // table remains an inner four-column table, but normally needs no
-        // scrolling because landscape supplies much more width.
-        // Expand columns first.  Keep the portrait rowCount while moving
-        // every child back into rows 0..4; GridLayout validates row specs
-        // immediately when setRowCount() is called.
-        grid.setColumnCount(21);
-
-        setGridPositionById(root,R.id.bluestate,           0,0,5);
-        setGridPositionById(root,R.id.info,                5,0,2);
-        setGridPositionById(root,R.id.finish,              7,0,3);
-        setGridPosition(sensorAction,                     10,0,4);
-        setGridPositionById(root,R.id.locationpermission, 14,0,6);
-
-        setGridPositionById(root,R.id.scan,                0,1,19);
-        setGridPositionById(root,R.id.sensors,             0,2,5);
-        setGridPositionById(root,R.id.deviceaddress,       5,2,3);
-        setGridPositionById(root,R.id.forget,              8,2,4);
-        setGridPositionById(root,R.id.streaming,          12,2,2);
-        setGridPositionById(root,R.id.clear,              14,2,6);
-
-        setGridPosition(diagnosticScroll,                  0,3,20);
-
-        setGridPositionById(root,R.id.help,                0,4,4);
-        setGridPositionById(root,R.id.usebluetooth,        4,4,3);
-        setGridPositionById(root,R.id.background,          7,4,3);
-        setGridPositionById(root,R.id.priority,           10,4,3);
-        setGridPositionById(root,R.id.android13,          13,4,2);
-        setGridPositionById(root,R.id.close,              15,4,5);
-        setGridPositionById(root,R.id.rssi,               20,0,1,5);
-
-        // Now every direct child is inside rows 0..4, so shrinking the row
-        // count cannot trip GridLayout's index/span validation.
-        grid.setRowCount(5);
-
-        setGridContainerWidth(grid,WRAP_CONTENT);
-        setTextMaxWidth(root,Integer.MAX_VALUE,R.id.bluestate,R.id.scan,R.id.sensors,
-                        R.id.deviceaddress,R.id.streaming,R.id.locationpermission);
-
-        if(root instanceof android.widget.ScrollView)
-            ((android.widget.ScrollView)root).setFillViewport(true);
-
-        int[] clearMargins={R.id.deviceaddress,R.id.sensors,R.id.streaming,R.id.rssi,
-                            R.id.help,R.id.usebluetooth};
-        for(int id:clearMargins)
-            setGridMarginsById(root,id,0,0,0,0);
-        setGridMargins(diagnosticScroll,0,0,0,0);
-
-        int[] restore={R.id.info,R.id.finish,R.id.forget,R.id.clear,R.id.help,
-                       R.id.usebluetooth,R.id.background,R.id.priority,
-                       R.id.android13,R.id.close,R.id.deviceaddress,R.id.sensors,
-                       R.id.streaming,R.id.rssi};
-        for(int id:restore)
-            setGridWidthById(root,id,WRAP_CONTENT);
-        if(sensorAction!=null) {
-            ViewGroup.LayoutParams p=sensorAction.getLayoutParams();
-            if(p instanceof GridLayout.LayoutParams) {
-                ((GridLayout.LayoutParams)p).width=WRAP_CONTENT;
-                sensorAction.setLayoutParams(p);
-            }
-        }
-        if(diagnosticScroll!=null) {
-            ViewGroup.LayoutParams p=diagnosticScroll.getLayoutParams();
-            if(p instanceof GridLayout.LayoutParams) {
-                ((GridLayout.LayoutParams)p).width=WRAP_CONTENT;
-                diagnosticScroll.setLayoutParams(p);
-            }
-        }
-        setDiagnosticColumnWidths(root,WRAP_CONTENT,WRAP_CONTENT,WRAP_CONTENT);
-        int[] infos={R.id.textView4,R.id.constatus,R.id.keyinfo,R.id.glucoseinfo};
-        for(int id:infos)
-            setGridWidthById(root,id,WRAP_CONTENT);
-        if(diagnosticGrid!=null)
-            setGridContainerWidth(diagnosticGrid,WRAP_CONTENT);
-
-        int[] canWrap={R.id.stage,R.id.textView2,R.id.textView3,
-                       R.id.consuccess,R.id.confail,R.id.keysuccess,R.id.keyfailure,
-                       R.id.glucosesuccess,R.id.glucosefailure};
-        for(int id:canWrap) {
-            View child=root.findViewById(id);
-            if(child instanceof TextView)
-                ((TextView)child).setSingleLine(false);
-        }
-
-        View rssi=root.findViewById(R.id.rssi);
-        if(rssi!=null) {
-            ViewGroup.LayoutParams base=rssi.getLayoutParams();
-            if(base instanceof GridLayout.LayoutParams) {
-                GridLayout.LayoutParams rp=(GridLayout.LayoutParams)base;
-                rp.width=WRAP_CONTENT;
-                rp.height=WRAP_CONTENT;
-                rp.columnSpec=GridLayout.spec(20,1);
-                rp.rowSpec=GridLayout.spec(0,5);
-                rp.setGravity(Gravity.CENTER_VERTICAL|Gravity.END);
-                rssi.setLayoutParams(rp);
-            }
-            if(rssi instanceof TextView)
-                ((TextView)rssi).setTextSize(10.0f);
-            rssi.setPadding(0,0,0,0);
-            rssi.setRotation(-90.0f);
-        }
-    }
-
-    grid.requestLayout();
-    if(diagnosticGrid!=null)
-        diagnosticGrid.requestLayout();
+private static int dp(float value) {
+    return (int)(GlucoseCurve.metrics.density*value+0.5f);
 }
 
 bluediag(MainActivity act,final ArrayList<SuperGattCallback> gatts) {
@@ -942,119 +555,169 @@ bluediag(MainActivity act,final ArrayList<SuperGattCallback> gatts) {
 
            }
 
-    LayoutInflater flater= LayoutInflater.from(act);
-    View view = flater.inflate(R.layout.bluesensor, null, false);
+    LayoutInflater flater=LayoutInflater.from(act);
+    GridLayout diagnosticGrid=(GridLayout)flater.inflate(R.layout.bluesensor,null,false);
 
-    forget=view.findViewById(R.id.forget);
-    scanview=view.findViewById(R.id.scan);
-    starttimeV=view.findViewById(R.id.stage);
-    rssiview=view.findViewById(R.id.rssi);
-    rssiview.setPadding(0,0,0,0);
-      CheckDirectionBox android13=view.findViewById(R.id.android13);
-      if(android13!=null) {
-         android13.setChecked( SuperGattCallback.autoconnect);
-         android13.setOnCheckedChangeListener( (buttonView,  isChecked) -> { SensorBluetooth.setAutoconnect(isChecked); });
-         }
-    info=view.findViewById(R.id.info);
-    {if(doLog) {Log.i(LOG_ID,"info.setVisibility(INVISIBLE);");};};
+    // Only the diagnostic table comes from XML.  Everything else is simpler
+    // to construct directly because Layout owns the actual row arrangement.
+    starttimeV=diagnosticGrid.findViewById(R.id.stage);
+    contimes=new TextView[]{diagnosticGrid.findViewById(R.id.consuccess),
+                            diagnosticGrid.findViewById(R.id.confail)};
+    constatus=diagnosticGrid.findViewById(R.id.constatus);
+    constatus.setTextIsSelectable(true);
+    keytimes=new TextView[]{diagnosticGrid.findViewById(R.id.keysuccess),
+                            diagnosticGrid.findViewById(R.id.keyfailure)};
+    keyinfo=diagnosticGrid.findViewById(R.id.keyinfo);
+    keyinfo.setTextIsSelectable(true);
+    glucosetimes=new TextView[]{diagnosticGrid.findViewById(R.id.glucosesuccess),
+                                diagnosticGrid.findViewById(R.id.glucosefailure)};
+    glucoseinfo=diagnosticGrid.findViewById(R.id.glucoseinfo);
+
+    bluestate=getlabel(act,"");
+    info=getbutton(act,R.string.info);
     info.setVisibility(INVISIBLE);
+    final Button finish=isWearable?null:getbutton(act,R.string.finish);
+
+    streamhistory=getcheckbox(act,R.string.streamhistory,Natives.getStreamHistory());
+    alarmclock=getcheckbox(act,R.string.alarmclock,Natives.getalarmclock());
+    alarmclock.setVisibility(GONE);
+    resetbutton=getbutton(act,R.string.resetname);
+    resetbutton.setVisibility(GONE);
+    divorcebutton=getbutton(act,R.string.divorcename);
+    divorcebutton.setVisibility(GONE);
+
+    FrameLayout sensorAction=new FrameLayout(act);
+    FrameLayout.LayoutParams sensorActionParams=new FrameLayout.LayoutParams(WRAP_CONTENT,WRAP_CONTENT);
+    sensorAction.addView(streamhistory,sensorActionParams);
+    sensorAction.addView(alarmclock,new FrameLayout.LayoutParams(WRAP_CONTENT,WRAP_CONTENT));
+    sensorAction.addView(resetbutton,new FrameLayout.LayoutParams(WRAP_CONTENT,WRAP_CONTENT));
+    sensorAction.addView(divorcebutton,new FrameLayout.LayoutParams(WRAP_CONTENT,WRAP_CONTENT));
+
+    scanview=getlabel(act,"");
+    spin=new Spinner(act);
+    address=getlabel(act,"");
+    forget=getbutton(act,R.string.forget);
+    streaming=getlabel(act,"");
+    clear=getbutton(act,R.string.clear);
+
+    usebluetooth=getcheckbox(act,R.string.use_bluetooth,Natives.getusebluetooth());
+    priority=getcheckbox(act,R.string.high_priority,Natives.getpriority());
+    final CheckDirectionBox android13=
+            getcheckbox(act,R.string.android13,SuperGattCallback.autoconnect);
+    android13.setOnCheckedChangeListener(
+            (buttonView,isChecked)->SensorBluetooth.setAutoconnect(isChecked));
+
+    rssiview=getlabel(act,"RSSI");
+   // rssiview.setPadding(0,0,0,0);
+    //rssiview.setTextSize(10.0f);
+
+    final Button close=getbutton(act,R.string.closename);
+    final Button help=isWearable?null:getbutton(act,R.string.helpname);
+    final Button background=isWearable?null:getbutton(act,R.string.dozemode);
+
+    final Layout content;
+    final View showview;
+
     if(isWearable) {
-        /*
-         * The wearable and phone/tablet builds use different bluesensor.xml
-         * resources.  Do not reference R.id.hori here: the non-wearable
-         * resource intentionally has no outer horizontal scroller, so that
-         * ID need not exist in its generated R class.
-         */
-        final int horiId = act.getResources().getIdentifier("hori", "id", act.getPackageName());
-        HorizontalScrollView scroll = horiId == 0 ? null : view.findViewById(horiId);
-        if(scroll != null) {
-            scroll.setSmoothScrollingEnabled(false);
-            scroll.setVerticalScrollBarEnabled(false);
-            scroll.setHorizontalScrollBarEnabled(Applic.horiScrollbar);
-            scroll.setScrollBarFadeDuration(0);
-            int height=GlucoseCurve.getheight();
-            scroll.setMinimumHeight(height);
-            {if(doLog) {Log.i(LOG_ID,"height="+height);};};
-        }
-        else {
-            Log.e(LOG_ID,"Wearable bluesensor layout has no id/hori HorizontalScrollView");
-        }
+        disconnectsensor=getcheckbox(act,R.string.disconnectsensor,Natives.getDisconnectSensor());
+        disconnectsensor.setOnCheckedChangeListener(
+                (buttonView,isChecked)->Natives.setDisconnectSensor(isChecked));
+        clear.setVisibility(GONE);
+        bluestate.setPaddingRelative(0,0,dp(5),0);
+
+        content=new Layout(act,
+                new View[]{usebluetooth,bluestate,sensorAction,priority,disconnectsensor,android13},
+                new View[]{scanview},
+                new View[]{spin,address,forget,streaming,clear,info},
+                new View[]{diagnosticGrid},
+                new View[]{rssiview,close});
+        content.setPadding(dp(30),dp(18),dp(8),dp(30));
+
+        androidx.core.widget.NestedScrollView vertical=
+                new androidx.core.widget.NestedScrollView(act);
+        vertical.setFillViewport(true);
+        vertical.setVerticalScrollBarEnabled(true);
+        vertical.setScrollbarFadingEnabled(false);
+        vertical.addView(content,new ViewGroup.LayoutParams(WRAP_CONTENT,WRAP_CONTENT));
+
+        HorizontalScrollView horizontal=new HorizontalScrollView(act);
+        horizontal.setFillViewport(true);
+        horizontal.setSmoothScrollingEnabled(false);
+        horizontal.setVerticalScrollBarEnabled(false);
+        horizontal.setHorizontalScrollBarEnabled(Applic.horiScrollbar);
+        horizontal.setScrollBarFadeDuration(0);
+        horizontal.setMinimumHeight(GlucoseCurve.getheight());
+        horizontal.addView(vertical,new ViewGroup.LayoutParams(MATCH_PARENT,MATCH_PARENT));
+        showview=horizontal;
+        showview.setBackgroundColor(Applic.backgroundcolor); //??
     }
     else {
-        /*
-         * The phone/tablet resource deliberately has no outer horizontal
-         * scroller.  A HorizontalScrollView around the whole page competes
-         * with the HorizontalScrollView used by the diagnostic table and can
-         * consume its horizontal drag gestures.  The non-wearable root is a
-         * vertical ScrollView; only diagnosticscroll scrolls horizontally.
-         */
-         }
+        locationpermission=getbutton(act,R.string.scan_permission);
+        address.setBackgroundColor(BLACK);
 
-    // For the non-wearable resource, view is the outer vertical ScrollView.
-    // The wearable resource is unchanged and already uses view here.
-    View showview=view;
-    final int[] phoneLayoutState={-1,-1}; // portrait flag, visible width
+        HorizontalScrollView diagnosticScroll=new HorizontalScrollView(act);
+        diagnosticScroll.setFillViewport(false);
+        diagnosticScroll.setSmoothScrollingEnabled(false);
+        diagnosticScroll.setHorizontalScrollBarEnabled(Applic.horiScrollbar);
+        diagnosticScroll.setScrollBarFadeDuration(0);
+        diagnosticScroll.addView(diagnosticGrid, new ViewGroup.LayoutParams(WRAP_CONTENT,WRAP_CONTENT));
+        diagnosticScroll.setLayoutParams( new ViewGroup.MarginLayoutParams(MATCH_PARENT,WRAP_CONTENT));
+
+        content=new Layout(act,
+                new View[]{bluestate,info,finish,sensorAction,locationpermission},
+                new View[]{scanview},
+                new View[]{spin,address,forget,streaming,clear},
+                new View[]{diagnosticScroll},
+                new View[]{help,usebluetooth,background},
+                new View[]{priority,android13,rssiview,close})
+                .portraitLayout(
+                new View[]{bluestate},
+                new View[]{info,finish},
+                new View[]{sensorAction},
+                new View[]{locationpermission},
+                new View[]{scanview},
+                new View[]{spin,address},
+                new View[]{forget,rssiview},
+                new View[]{streaming,clear},
+                new View[]{diagnosticScroll},
+                new View[]{help,usebluetooth},
+                new View[]{background,priority},
+                new View[]{android13,close});
+        content.setPadding(dp(15),dp(9),dp(2),dp(9));
+
+         content.setBackgroundColor(Applic.backgroundcolor);
+        android.widget.ScrollView vertical=new android.widget.ScrollView(act);
+        vertical.setFillViewport(false); 
+        content.systembarMargins();
+        vertical.addView(content,new android.widget.ScrollView.LayoutParams( MATCH_PARENT,WRAP_CONTENT));
+        showview=vertical;
+       }
+
+    final int addressrand=dp(5);
+    address.setPaddingRelative(0,0,addressrand,0);
+
+    {if(doLog) {Log.i(LOG_ID,"info.setVisibility(INVISIBLE);");};};
+
+    if(gatts==null || gatts.size()==0)
+        forget.setVisibility(GONE);
 
     if(!isWearable) {
-        boolean portrait=phonePortrait(view);
-        int width=GlucoseCurve.getwidth();
-        if(width<=0)
-            width=(int)(GlucoseCurve.metrics.density*320.0f);
-        setPhoneSensorLayout(view,portrait,width);
-        phoneLayoutState[0]=portrait?1:0;
-        phoneLayoutState[1]=width;
-    }
-
-    priority=view.findViewById(R.id.priority);
-    streamhistory=view.findViewById(R.id.streamhistory);
-    alarmclock=view.findViewById(R.id.alarmclock);
-    resetbutton=view.findViewById(R.id.resetbutton);
-    divorcebutton=view.findViewById(R.id.divorcebutton);
-    clear=view.findViewById(R.id.clear);
-   alarmclock.setChecked(Natives.getalarmclock());
-if(!isWearable) {
-    Button finish = view.findViewById(R.id.finish);
-    if (gatts != null && gatts.size() > 0) {
-        finish.setOnClickListener(v -> {
-            if (gatts != null && gatts.size() > 0) {
-                if (gattselected >= gatts.size()) {
-                    {if(doLog) {Log.i(LOG_ID, "show: gattselected=" + gattselected);};};
-                    gattselected = 0;
+        if(gatts!=null && gatts.size()>0) {
+            finish.setOnClickListener(v -> {
+                if(gattselected>=gatts.size()) {
+                    {if(doLog) {Log.i(LOG_ID,"show: gattselected="+gattselected);};};
+                    gattselected=0;
                     return;
                 }
-                var gat = gatts.get(gattselected);
-                confirmFinish(gat);
-            }
-        });
+                confirmFinish(gatts.get(gattselected));
+            });
+        }
+        else {
+            {if(doLog) {Log.i(LOG_ID,"finish.setVisibility(GONE);");};};
+            finish.setVisibility(GONE);
+        }
     }
-    else {
 
-        {if(doLog) {Log.i(LOG_ID,"finish.setVisibility(GONE);");};};
-        finish.setVisibility(GONE);
-        }
-    } 
-else {
-   disconnectsensor=view.findViewById(R.id.disconnectsensor);
-   disconnectsensor.setChecked(Natives.getDisconnectSensor());
-   disconnectsensor.setOnCheckedChangeListener( (buttonView,  isChecked) -> Natives.setDisconnectSensor(isChecked) );
-   }
-    if (gatts == null || gatts.size()== 0) {
-        //priority.setVisibility(GONE);
-        forget.setVisibility(GONE);
-        }
-    contimes=new TextView[]{view.findViewById(R.id.consuccess) , view.findViewById(R.id.confail)};
-    constatus=view.findViewById(R.id.constatus);
-    constatus.setTextIsSelectable(true);
-    streaming=view.findViewById(R.id.streaming);
-    address=view.findViewById(R.id.deviceaddress);
-    final int addressrand=(int)tk.glucodata.GlucoseCurve.metrics.density*5;
-    address.setPaddingRelative(0,0,addressrand,0);
-    keytimes=new TextView[]{view.findViewById(R.id.keysuccess) , view.findViewById(R.id.keyfailure)}; keyinfo=view.findViewById(R.id.keyinfo);
-    keyinfo.setTextIsSelectable(true);
-    glucosetimes=new TextView[]{view.findViewById(R.id.glucosesuccess) , view.findViewById(R.id.glucosefailure)}; glucoseinfo=view.findViewById(R.id.glucoseinfo);
-    bluestate=view.findViewById(R.id.bluestate);
-    usebluetooth=view.findViewById(R.id.usebluetooth);
-   
     usebluetooth.setOnCheckedChangeListener(
          (buttonView,  isChecked) -> {
              {if(doLog) {Log.i(LOG_ID,"usebluetooth "+isChecked);};};
@@ -1157,7 +820,6 @@ else {
        }
     boolean hasperm=Build.VERSION.SDK_INT < 23||Applic.noPermissions(act).length==0;
     if(!isWearable)  {
-        locationpermission=view.findViewById(R.id.locationpermission);
         if(hasperm)   {
             {if(doLog) {Log.i(LOG_ID,"locationpermission.setVisibility(GONE);");};};
             locationpermission.setVisibility(GONE);
@@ -1178,7 +840,6 @@ else {
                 });
             }
         }
-    spin=view.findViewById(R.id.sensors);
    if(isWearable)
       spin.setPopupBackgroundResource(R.drawable.helpbackground);
     boolean[] first={true};
@@ -1215,9 +876,7 @@ else {
           setadapter(act,gatts);
         }
     if(!isWearable) {
-         Button help=!isWearable?view.findViewById(R.id.help):null;
         help.setOnClickListener(v-> helplight(R.string.sensorhelp,act));
-         Button background=view.findViewById(R.id.background);
         if(android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
             background.setOnClickListener(v-> Battery.batteryscreen(act,showview));
             }
@@ -1228,12 +887,10 @@ else {
         }
 
 
-     Button close=view.findViewById(R.id.close);
      close.setOnClickListener(v-> act.doonback());
    if(!useclose)
       close.setVisibility(GONE);
 
-      view.setBackgroundColor( Applic.backgroundcolor);
     show(act,showview);
    // act.addMyContentView(showview, new ViewGroup.LayoutParams( WRAP_CONTENT, WRAP_CONTENT));
 
@@ -1241,7 +898,7 @@ else {
 //    var  params = new FrameLayout.LayoutParams( MATCH_PARENT, MATCH_PARENT, Gravity.CENTER|Gravity.CENTER_HORIZONTAL);
     final boolean phonePortraitNow=!isWearable && phonePortrait(showview);
     var  params = new FrameLayout.LayoutParams(
-            phonePortraitNow?MATCH_PARENT:WRAP_CONTENT,
+            isWearable?WRAP_CONTENT:MATCH_PARENT,
             WRAP_CONTENT,
             phonePortraitNow?(Gravity.TOP|Gravity.CENTER_HORIZONTAL):
                              (Gravity.CENTER|Gravity.CENTER_HORIZONTAL));
@@ -1252,51 +909,16 @@ else {
         params.rightMargin=(int)(MainActivity.systembarRight*.3f);
     }
     act.addMyContentView(showview, params);
-
+/*
     if(!isWearable) {
         final View phoneRoot=showview;
         final FrameLayout.LayoutParams phoneParams=params;
 
-        /*
-         * MainActivity is not recreated on rotation.  Re-evaluate both the
-         * reflow and the real current window insets whenever the live view's
-         * bounds change.  Also reflow portrait if its visible width changes
-         * (split screen, navigation bar side changes, etc.).
-         */
-        phoneRoot.addOnLayoutChangeListener((v,left,top,right,bottom,
-                                             oldLeft,oldTop,oldRight,oldBottom) -> {
-            boolean portrait=phonePortrait(v);
-            int width=visibleWindowWidth(v);
-            if(width<=0)
-                width=right-left;
-            if(width<=0)
-                width=(int)(GlucoseCurve.metrics.density*320.0f);
+        phoneRoot.addOnLayoutChangeListener((v,left,top,right,bottom, oldLeft,oldTop,oldRight,oldBottom) -> updatePhoneOverlayParams(phoneRoot,phoneParams,phonePortrait(v)));
 
-            int portraitInt=portrait?1:0;
-            if(phoneLayoutState[0]!=portraitInt ||
-               (portrait && Math.abs(phoneLayoutState[1]-width)>1)) {
-                phoneLayoutState[0]=portraitInt;
-                phoneLayoutState[1]=width;
-                setPhoneSensorLayout(phoneRoot,portrait,width);
-            }
-            updatePhoneOverlayParams(phoneRoot,phoneParams,portrait);
-        });
-
-        // The first accurate visible frame exists only after attachment.
-        phoneRoot.post(() -> {
-            boolean portrait=phonePortrait(phoneRoot);
-            int width=visibleWindowWidth(phoneRoot);
-            if(width<=0)
-                width=GlucoseCurve.getwidth();
-            if(width<=0)
-                width=(int)(GlucoseCurve.metrics.density*320.0f);
-            phoneLayoutState[0]=portrait?1:0;
-            phoneLayoutState[1]=width;
-            setPhoneSensorLayout(phoneRoot,portrait,width);
-            updatePhoneOverlayParams(phoneRoot,phoneParams,portrait);
-        });
+        phoneRoot.post(() -> updatePhoneOverlayParams( phoneRoot,phoneParams,phonePortrait(phoneRoot)));
     }
-
+*/
     var scheduled=Applic.scheduler.scheduleAtFixedRate( ()-> {
        {if(doLog) {Log.i(LOG_ID,"scheduled");};};
         act.runOnUiThread( ()-> { 

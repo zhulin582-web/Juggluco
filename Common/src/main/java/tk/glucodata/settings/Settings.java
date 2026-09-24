@@ -1633,9 +1633,12 @@ setvalues();
 @SuppressLint("UseCompatLoadingForDrawables")
 static private void exchanges(MainActivity context, View parent) {
   parent.setVisibility(GONE);
+ /* 
    var emulator=getbutton(context,R.string.l3emu_title);
    emulator.setOnClickListener(v -> tk.glucodata.Libre3Emulator.show(context));
    if(BuildConfig.libreVersion!=3 || Build.VERSION.SDK_INT<26) emulator.setVisibility(GONE);
+
+   */
     final CheckDirectionBox xdripbroadcast = new CheckDirectionBox(context);
     final CheckDirectionBox jugglucobroadcast = new CheckDirectionBox(context);
 
@@ -1686,7 +1689,7 @@ static private void exchanges(MainActivity context, View parent) {
         lay = new Layout(context, (l, w, h) -> {
             int[] ret = {w, h};
             return ret;
-        },new View[]{xdripbroadcast},new View[]{uploader,mirrorview}  ,new View[]{jugglucobroadcast}, new View[]{emulator}, new View[]{ok});
+        },new View[]{xdripbroadcast},new View[]{uploader,mirrorview}  ,new View[]{jugglucobroadcast}, /*new View[]{emulator},*/ new View[]{ok});
 
    final var density=tk.glucodata.GlucoseCurve.metrics.density;
         lay.setPadding((int)(density*8.0),(int)(density*25.0),(int)(density*8.0),(int)(density*2.0));
@@ -1778,13 +1781,13 @@ static private void exchanges(MainActivity context, View parent) {
             int[] ret = {w, h};
             return ret;
         }, new View[]{everSensebroadcast,librelinkbroadcast},new View[]{xdripbroadcast, jugglucobroadcast}, new View[]{webserver, uploader, libreview}, (Build.VERSION.SDK_INT >= 28) ? new View[]{healthconnect,exportview,mirrorview} :new View[]{exportview,mirrorview},
-                new View[]{emulator},new View[]{help,meters, ok})
+                /*new View[]{emulator},*/new View[]{help,meters, ok})
             .portraitLayout(
                 new View[]{everSensebroadcast},new View[]{librelinkbroadcast},
                 new View[]{xdripbroadcast},new View[]{jugglucobroadcast},
                 new View[]{webserver,uploader},new View[]{libreview},
                 (Build.VERSION.SDK_INT >= 28)?new View[]{healthconnect}:null,
-                new View[]{exportview,mirrorview},new View[]{emulator},new View[]{help,meters},new View[]{ok});
+                new View[]{exportview,mirrorview},/*new View[]{emulator},*/new View[]{help,meters},new View[]{ok});
 
     final   int pad=(int)(tk.glucodata.GlucoseCurve.metrics.density*10.0);
     final   int bottompad=(int)(tk.glucodata.GlucoseCurve.metrics.density*5.0);

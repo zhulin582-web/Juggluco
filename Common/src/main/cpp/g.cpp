@@ -28,6 +28,7 @@
 // Created by jka on 27-11-20.
 //
 #include <cinttypes>
+#include <algorithm>
 #include <cmath>
 #include <vector>
 #include <jni.h>
@@ -1039,25 +1040,62 @@ extern "C" JNIEXPORT jlongArray JNICALL   fromjava(getlastGlucose)(JNIEnv *env, 
         }
     return nullptr;
     }
-// Snapshot saved stream readings without opening a sensor connection or changing
-// its receive/backfill cursors. Java maps timestamps onto the emulator timeline.
+// Emulator reading snapshots. Each record: timestamp, raw mg/L, rate * 100,
+// original Libre 3 life count (-1 for other sources), original start time.
+// Never apply the phone's calibration or substitute stream values for history.
+static void emulatorAppend(std::vector<jlong> &values,jlong time,jlong mgL,jlong rate,jlong minute,jlong start) {
+    if(mgL<390 || mgL>5010 || values.size()>=32768*5) return;
+    values.insert(values.end(),{time,mgL,rate,minute,start});
+}
+static bool emulatorInRange(jlong time,jlong minute,jlong start,jlong from,jlong through) {
+    const jlong nominal=minute>=0?start+minute*60:time;
+    return nominal>=from && nominal<=through;
+}
+static jlongArray emulatorArray(JNIEnv *env,const std::vector<jlong> &values) {
+    jlongArray result=env->NewLongArray(static_cast<jsize>(values.size()));
+    if(result && !values.empty()) env->SetLongArrayRegion(result,0,static_cast<jsize>(values.size()),values.data());
+    return result;
+}
 extern "C" JNIEXPORT jlongArray JNICALL fromjava(libre3EmulatorHistory)(JNIEnv *env,jclass,jlong from,jlong through) {
     if(from<0 || through<from) return env->NewLongArray(0);
     std::vector<jlong> values;
     if(const auto [hist,index]=getlaststream(time(nullptr));hist) {
-        auto calibrate=make_calibrator<ScanData>(hist);
-        for(const auto &item:hist->getPolldata()) {
-            if(!item.valid() || item.gettime()<from || item.gettime()>through) continue;
-            const double calibrated=calibrate.calibrateONEtest(item);
-            const double mgL=isnan(calibrated)?item.getmgdL()*10.0:round(calibrated*10.0);
-            if(!std::isfinite(mgL) || mgL<390 || mgL>5010) continue;
-            values.push_back(item.gettime()); values.push_back(static_cast<jlong>(mgL));
-            if(values.size()>=32768*2) break;
+        const jlong start=hist->getstarttime();
+        const int end=std::min(hist->getAllendhistory(),hist->maxpos());
+        for(int pos=std::max(0,hist->getstarthistory());pos<end;pos++) {
+            const Glucose &item=*hist->getglucose(pos);
+            const jlong minute=hist->isLibre3()?static_cast<jlong>(item.getid()):-1;
+            if(!item.valid() || !emulatorInRange(item.gettime(),minute,start,from,through)) continue;
+            emulatorAppend(values,item.gettime(),item.getmgL(),0,minute,start);
         }
     }
-    jlongArray result=env->NewLongArray(static_cast<jsize>(values.size()));
-    if(result && !values.empty()) env->SetLongArrayRegion(result,0,static_cast<jsize>(values.size()),values.data());
-    return result;
+    return emulatorArray(env,values);
+}
+extern "C" JNIEXPORT jlongArray JNICALL fromjava(libre3EmulatorStream)(JNIEnv *env,jclass,jlong from,jlong through) {
+    if(from<0 || through<from) return env->NewLongArray(0);
+    std::vector<jlong> values;
+    if(const auto [hist,index]=getlaststream(time(nullptr));hist) {
+        const jlong start=hist->getstarttime();
+        for(const auto &item:hist->getPolldata()) {
+            const jlong minute=hist->isLibre3()?static_cast<jlong>(item.getid()):-1;
+            // valid(0) avoids the timestamp repair performed by valid() on gaps.
+            if(!item.valid(0) || !emulatorInRange(item.gettime(),minute,start,from,through)) continue;
+            emulatorAppend(values,item.gettime(),item.getmgL(),0,minute,start);
+        }
+    }
+    return emulatorArray(env,values);
+}
+extern "C" JNIEXPORT jlongArray JNICALL fromjava(libre3EmulatorLatest)(JNIEnv *env,jclass) {
+    std::vector<jlong> values;
+    if(const auto [hist,index]=getlaststream(time(nullptr));hist) {
+        if(const ScanData *item=hist->lastValidStream()) {
+            const float rate=item->getchange();
+            const jlong change=std::isfinite(rate)?static_cast<jlong>(std::max(-32767.0,std::min(32767.0,round(rate*100.0)))):-32768;
+            emulatorAppend(values,item->gettime(),item->getmgL(),change,
+                hist->isLibre3()?static_cast<jlong>(item->getid()):-1,hist->getstarttime());
+        }
+    }
+    return emulatorArray(env,values);
 }
 jlong glucoseback(uint32_t nu,uint32_t glval,float drate,SensorGlucoseData *hist) {
         if(!glval) return 0LL;
