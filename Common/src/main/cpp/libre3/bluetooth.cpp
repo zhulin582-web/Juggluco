@@ -181,8 +181,24 @@ static void save3history(SensorGlucoseData *sens, const oneminute *minptr) {
 
     }
 
-
 extern jlong glucoseback(uint32_t nu,uint32_t glval,float drate,SensorGlucoseData *hist) ;
+/*
+
+Detect when an incoming value is irregular:
+    - Much more or much less than a minute has passed since the previous reading.
+    - The arrival time and id of this reading are not in line with the time and id of the previous reading. 
+*/
+#if 0
+static bool irregular(const SensorGlucoseData *sens,uint32_t nowsec,int lifecount) {
+    if(const ScanData *last=sens->lastpoll()) {
+        if(last->getmgdL()) {
+            double stepsize=((double)nowsec-last->gettime())/(lifecount-last->getid());
+            return stepsize>85.0||stepsize<35.0;
+            }
+       }
+     return false;
+    }
+#endif
 static jlong save3current(SensorGlucoseData *sens, const oneminute *minptr,uint32_t now) {
 #ifdef UNCAPPED
     auto curval= minptr->uncappedCurrentMgDl;
@@ -200,8 +216,15 @@ static jlong save3current(SensorGlucoseData *sens, const oneminute *minptr,uint3
     auto curval= minptr->readingMgDl;
 #endif
     jlong res=0LL;
-    sens->timelastcurrent=now;
-    sens->lastlifecount=minptr->lifeCount;
+    const int lifeCount= minptr->lifeCount;
+    uint32_t expectnow=sens->lifeCount2time(lifeCount);
+    if(int(now-expectnow)>15) {
+        now=expectnow;
+        }
+    else {
+        sens->timelastcurrent=now;
+        sens->lastlifecount=lifeCount;
+        }
 
 #ifndef UNCAPPED
     if(curval==8231) {
@@ -273,6 +296,8 @@ extern "C" JNIEXPORT jbyteArray JNICALL fromjava(getpin)(JNIEnv *env, jclass thi
 
 
 extern                void wakewithcurrent();
+
+
 extern "C" JNIEXPORT  jlong JNICALL fromjava(saveLibre3MinuteL)(JNIEnv *env, jclass thiz, jlong sensorptr,jbyteArray jmindata,jlong msec) {
     SensorGlucoseData *sens=reinterpret_cast<SensorGlucoseData *>(sensorptr);
     if(!sens) {

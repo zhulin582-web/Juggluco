@@ -38,6 +38,9 @@
 #include "datbackup.hpp"
 #include "EverSense.hpp"
 #include "glucose.hpp"
+#include "streamdata.hpp"
+#include "v3crypto.hpp"
+#include "../sibionics/deviceaddress.hpp"
 
 extern Sensoren *sensors;
 using namespace std::literals;
@@ -378,20 +381,22 @@ static float makearrow(const SensorGlucoseData *sens,float mgdL,uint32_t was)  {
 
     const auto stream=sens->getPolldata();
     int el=1;
-    for(const ScanData *iter=&stream.back();el<3&&iter>=&stream.begin()[0];--iter,++el) {
-            y.push_back(iter->getmgdL());
-            x.push_back(iter->gettime());
+    for(size_t pos=stream.size();el<3&&pos>0;++el) {
+            const auto &value=stream[--pos];
+            y.push_back(value.getmgdL());
+            x.push_back(value.gettime());
             }
     if(el>1) {
           return getA(w,x,y,x.size())*50;
         }
     return NAN;
     }
-jlong gs3Glucose(SensorGlucoseData *sens,std::vector<uint8_t> &vect,std::string &message,const uint8_t* in_packet, int in_len, uint32_t &nowsecs) {
+static jlong gs3GlucoseV2(SensorGlucoseData *sens,std::vector<uint8_t> &vect,std::string &message,const uint8_t* in_packet, int in_len, uint32_t &nowsecs) {
     constexpr const bool use_rc4=true;
     // BN names: var_228 / var_128 / var_540 — see header comment.
     uint8_t plain[0xFA] = {};   // var_228, scratch (zeroed up front)
     uint8_t buf  [0xFA];        // var_128, working copy of the packet
+    if(!in_packet||in_len<4||in_len>sizeof(buf)) return 1LL;
 
     // -------------------------------------------------------------
     // 1. Copy or RC4-decrypt the incoming packet into `buf`.
@@ -422,6 +427,7 @@ jlong gs3Glucose(SensorGlucoseData *sens,std::vector<uint8_t> &vect,std::string 
 
     const uint8_t length_byte = buf[0];               // payload length in `buf`
     const uint8_t cmd         = buf[1];               // command byte
+    if(length_byte+1!=in_len||!verify_checksum(buf,length_byte)) return 1LL;
 
 
 
@@ -504,6 +510,7 @@ jlong gs3Glucose(SensorGlucoseData *sens,std::vector<uint8_t> &vect,std::string 
         if (!verify_checksum(plain, length_byte)) { break; }
 
         const uint8_t count = plain[2];
+        if(in_len!=12+8*unsigned(count)) break;
         uint16_t startIndex = *(const uint16_t*)&plain[3];
         uint32_t startTime = *(const uint32_t*)&plain[5];
         uint16_t last_reindex= (uint16_t)(plain[length_byte-2] | (plain[length_byte-1] << 8));
@@ -637,6 +644,7 @@ extern uint32_t makestarttime(int index,uint32_t eventTime);
 
         switch (sub) {
             case 0x01: {                                  // u16 sensor reading
+                if(in_len<6) break;
                 cgmv120_u16sens_t s{};
                 s.value = *(const uint16_t*)&plain[3];
                 LOGGER("u16sens_t %x\n",s.value);
@@ -645,6 +653,7 @@ extern uint32_t makestarttime(int index,uint32_t eventTime);
                 break;
             }
             case 0x02: {                                  // u8 activation
+                if(in_len<5) break;
                 cgmv120_u8activation_t a{};
                 a.value = plain[3];
                 LOGGER("u16activiation_t %x\n",a.value);
@@ -652,6 +661,7 @@ extern uint32_t makestarttime(int index,uint32_t eventTime);
                 break;
             }
             case 0x03: {                                  // device time
+                if(in_len<14) break;
 #ifndef NOLOG
                 cgmv120_device_time_t t{};
                 t.f00 = *(const uint16_t*)&plain[3];
@@ -675,6 +685,7 @@ extern uint32_t makestarttime(int index,uint32_t eventTime);
             }
 
             case 0x07: {                                  // device reset info
+                if(in_len<13) break;
 #ifndef NOLOG
                 cgmv120_device_reset_t r{};
                 r.reset_iswatchdog = plain[3];
@@ -723,4 +734,136 @@ extern uint32_t makestarttime(int index,uint32_t eventTime);
 
     return result;
   }
-  #endif
+
+extern int64_t v120_apply_authentication(int,const uint8_t *,uint8_t *,uint16_t);
+
+bool gs3Auth(si3stream &stream,std::vector<uint8_t> &command) {
+    auto &state=stream.gs3;
+    const char *address=stream.hist->deviceaddress();
+    state.addressValid=address&&sibionicsAddress(address,state.address);
+    if(!state.addressValid) {
+        LOGAR("gs3Auth: invalid device address");
+        command.clear();
+        return false;
+    }
+    std::copy_n(settings->data()->gs3id,state.account.size(),state.account.begin());
+    if(state.v3) command=state.authentication(gs3v3::encryptBlock);
+    else {
+        std::array<uint8_t,6> reversed;
+        std::reverse_copy(state.address.begin(),state.address.end(),reversed.begin());
+        command.resize(26);
+        const int subtype=state.legacySubtype<0?stream.hist->siSubtype():state.legacySubtype;
+        if(v120_apply_authentication(subtype,reversed.data(),command.data(),command.size())!=26) {
+            command.clear();return false;
+        }
+    }
+    LOGGER("gs3Auth protocol=%s address=%s\n",state.v3?"V3":"V2",address);
+    return !command.empty();
+}
+
+jlong gs3Glucose(si3stream &stream,std::vector<uint8_t> &vect,std::string &message,const uint8_t *packet,int length,uint32_t &nowsecs) {
+    auto &state=stream.gs3;
+    auto *sens=stream.hist;
+    if(!packet||length<4||length>250) {
+        message="GS3 invalid packet length";return 1LL;
+    }
+    gs3v3::Bytes wire(packet,packet+length),plain;
+    if(!state.v3) {
+        gs3v3::Bytes legacy(length);
+        Rc4XorWithKey(rc4key,16,0,packet,legacy.data(),length);
+        if(gs3v3::valid_frame(legacy)||wire==gs3v3::Bytes{4,0,0,0,0xfc})
+            return gs3GlucoseV2(sens,vect,message,packet,length,nowsecs);
+        // A strict, address-dependent bootstrap response is the fallback when
+        // Device Information did not advertise V3. Attempt it only once.
+        if(!state.attempted&&state.addressValid&&
+           gs3v3::decrypt_frame(state.address,wire,plain,gs3v3::encryptBlock)&&
+           plain==gs3v3::Bytes{4,0,0,0,0xfc}) {
+            vect=state.authentication(gs3v3::encryptBlock);
+            message="GS3 V3 detected; authenticating";
+        } else message="GS3 invalid V2 reply";
+        return 1LL;
+    }
+    if(!state.addressValid||!gs3v3::decrypt_frame(state.address,wire,plain,gs3v3::encryptBlock)) {
+        message="GS3 V3 length/checksum failed";
+        return 1LL;
+    }
+#ifndef NOLOG
+    hexstr decrypted(plain.data(),plain.size());
+    LOGGER("gs3 V3 decrypted %s\n",decrypted.str());
+#endif
+    auto reply=state.process(plain,nowsecs,gs3v3::encryptBlock);
+    vect=std::move(reply.command);
+    message=std::move(reply.message);
+    if(reply.failed) return 2LL;
+    if(state.authenticated) {
+        auto *info=sens->getinfo();
+        // warmupstartpos is a position in the saved array, not minutes or a
+        // sensor ID. mkdatabaseSI3 initializes it to 45 even for an old sensor.
+        unsigned first=0;
+        while(first<info->pollcount&&sens->getstream(first)->getid()<=info->manualwarmup) ++first;
+        info->warmupstartpos=std::min(first,255u);
+        if(reply.authenticated) info->pollinterval=60.0;
+    }
+    if(plain[1]==0xf0&&plain[2]==3)
+        LOGGER("gs3 V3 sensor activation=%u anchor=%u current=%u last=%u index=%u\n",state.deviceTime.activation_time,state.anchor,state.deviceTime.current_time,state.deviceTime.last_time,state.deviceTime.last_index);
+    const int sensorindex=sens->sensorIndex;
+    auto *sensor=sensors->getsensor(sensorindex);
+    if(state.anchor&&sens->getinfo()->starttime!=state.anchor) {
+        sens->getinfo()->starttime=state.anchor;
+        sensor->starttime=state.anchor;
+        sensors->setindices();
+        backup->resendResetDevices(&updateone::sendstream);
+    }
+    if(reply.records.empty()) return reply.authenticated?3LL:1LL;
+    uint32_t eventTime=0;
+    int mgdL=0;
+    float change=NAN;
+    for(const auto &item:reply.records) {
+        const auto &record=item.record;
+        if(const auto *last=sens->lastpoll();last&&last->getid()>=record.index) continue;
+        // Same fixed mmol/L*10 representation as the existing GS3 display path.
+        const int value=std::lround(record.display_glucose*.1*convfactordL);
+        ScanData checked{item.time,record.index,value,0,0.0f};
+        if(!checked.valid(0)) {
+            LOGGER("gs3 V3 invalid display value: index=%u raw=%u\n",record.index,record.display_glucose);
+            continue;
+        }
+        const float rate=makearrow(sens,value,item.time);
+        const int trend=rate2changeindex(rate);
+        const int before=sens->pollcount();
+        sens->savestream(item.time,record.index,value,trend,rate);
+        if(sens->pollcount()==before) {
+            message="GS3 glucose storage full";
+            return 2LL;
+        }
+        if(record.index<=sens->getinfo()->manualwarmup)
+            sens->getinfo()->warmupstartpos=std::min(sens->pollcount(),255);
+        state.savedIndex=record.index;
+        eventTime=item.time;mgdL=value;change=rate;
+        LOGGER("gs3 V3 index=%u time=%u display=%u mgdL=%d trend=%u cstate=%u/%u tstate=%u dstate=%u remaining=%u\n",record.index,item.time,record.display_glucose,value,record.trend,record.present_cstate,record.algorithm_cstate,record.tstate,record.dstate,record.remaining);
+    }
+    if(!eventTime) return reply.authenticated?3LL:1LL;
+    sens->receivehistory=nowsecs;
+    backup->wakebackup(wakestream);
+    const int last=sens->pollcount()-1;
+    if(last<sens->getbroadcastfrom()) sens->setbroadcastfrom(last);
+    const uint32_t endwarmup=state.anchor+sens->getinfo()->manualwarmup*60;
+    if(eventTime<=nowsecs&&nowsecs-eventTime<maxbluetoothage&&eventTime>endwarmup) {
+        sens->sensorerror=false;
+        if(sensor->finished) {
+            sensor->finished=0;
+            backup->resensordata(sensorindex);
+        }
+        extern jlong glucoseback(uint32_t,uint32_t,float,SensorGlucoseData *);
+        const auto result=glucoseback(eventTime,mgdL,change,sens);
+        extern void wakewithcurrent();
+        wakewithcurrent();
+#ifdef OLDEVERSENSE
+        sendEverSenseold(sens,5);
+#endif
+        nowsecs=eventTime;
+        return result;
+    }
+    return 1LL;
+}
+#endif

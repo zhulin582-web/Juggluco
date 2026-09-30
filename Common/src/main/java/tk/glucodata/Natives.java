@@ -34,6 +34,10 @@ import tk.glucodata.nums.item;
 
 
 public class Natives  {
+    public static native String askChatGPT(android.app.Activity activity, String archiveURL, String existingChatURL);
+    public static native void stopAskChatGPT();
+    public static native String askChatGPTStatus();
+
     static final private String LOG_ID="Natives";
 //   static long numptr=0;
 static  {
@@ -565,6 +569,19 @@ public static native void askServerforAccountID();
 public static native long getlibreAccountIDnumber();
 public static native void setlibreAccountIDnumber(long num);
 
+public static native boolean getnewLibre3ReceiverIDreceived();
+public static native void setnewLibre3ReceiverIDreceived(boolean value);
+public static native boolean getnewLibre3Activation();
+public static native void setnewLibre3Activation(boolean value);
+public static native boolean getnewLibre3Takeover();
+public static native void setnewLibre3Takeover(boolean value);
+public static native long getnewLibre3ReceiverID();
+public static native void setnewLibre3ReceiverID(long value);
+public static native long getnewLibre3ReceiverGeneration();
+public static native boolean savenewLibre3ReceiverID(long value,long generation);
+public static native void libreReceiverInit(String path,byte[] privateKey,byte[] wrapKey) throws java.io.IOException;
+public static native byte[] libreReceiverCrypt(int operation,byte[] input,byte[] iv) throws java.io.IOException;
+
 public static native String getlibreAccountID( );
 
 public static native void setlibreUserToken(boolean l3, String UserToken);
@@ -1040,6 +1057,8 @@ public static native void setManualWarmupMinutes(long sensorptr,int min);
 public static native int getMinimalWarmup(long dataptr);
 
 public static native GS3Data gs3Glucose(long dataptr, byte[] value,long mmsec);
+public static native void gs3SetDeviceInfo(long dataptr, String manufacturer, String software);
+public static native boolean gs3IsV3(long dataptr);
 public static native String gs3nfc(byte[] scan);
 public static native String md5sum(String input);
 public static native void saveGS3id(long id);

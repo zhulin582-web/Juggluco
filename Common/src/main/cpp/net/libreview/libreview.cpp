@@ -877,8 +877,12 @@ void initlibreviewjni(JNIEnv *env) {
           }
        }
 static bool initlibreconfig(bool libre3,bool restart) {
-    static jmethodID  libreconfig=getenv()->GetStaticMethodID(libreviewclass,"libreconfig","(ZZ)Z");
+    static const jmethodID  libreconfig=getenv()->GetStaticMethodID(libreviewclass,"libreconfig","(ZZ)Z");
     return   getenv()->CallStaticBooleanMethod(libreviewclass,libreconfig,libre3,restart);
+    }
+static bool retrieveLibreReceiverID() {
+    static const jmethodID  retrievefunc=getenv()->GetStaticMethodID(libreviewclass,"retrieveLibreReceiverID","()Z");
+    return   getenv()->CallStaticBooleanMethod(libreviewclass,retrievefunc);
     }
 /*
 static bool putsensor(const char *sensorid) {
@@ -1064,6 +1068,14 @@ void libreviewthread() {
                         }
                     LIBRELOGGER("initlibreconfig success %d\n",settings->data()->libreinit3);
                     alwaysnewstatus3=false;
+                    }
+
+                if(!settings->data()->newLibre3ReceiverIDreceived) {
+                    LIBRELOGAR("!newLibre3ReceiverIDreceived\n");
+                    if(retrieveLibreReceiverID()) {
+                        LIBRELOGAR("retrieveLibreReceiverID successful");
+                       // settings->data()->newLibre3ReceiverIDreceived=true;
+                        }
                     }
                 if(!settings->data()->sendtolibreview) {
                     askforaccount=false;

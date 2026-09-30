@@ -1,1 +1,0 @@
-../../../../wear/java/tk/glucodata/Libre3NfcEmulator.java

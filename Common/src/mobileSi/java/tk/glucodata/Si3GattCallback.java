@@ -50,6 +50,9 @@ public class Si3GattCallback extends SuperGattCallback {
 
     private boolean opInFlight = false;
     private final Deque<Runnable> opQueue = new ArrayDeque<>();
+    private volatile long queueGeneration = 0;
+    private int negotiatedMtu = 23;
+    private boolean notificationsEnabled = false;
     public static final class DeviceInfo {
         public int    batteryPercent;
         public String manufacturer;
@@ -110,7 +113,7 @@ public class Si3GattCallback extends SuperGattCallback {
 
 
 
-  boolean connected=false;
+  volatile boolean connected=false;
 
     private static final int MTU_REQUEST = 247;          // matches log line 14
 
@@ -123,15 +126,18 @@ public class Si3GattCallback extends SuperGattCallback {
         enqueue(() -> {
             pendingRead = h;
             if(!mBluetoothGatt.readCharacteristic(ch)) { Log.w(LOG_ID, "readCharacteristic returned false");
+            pendingRead=null;
             finishOp();
             }
         });
     }
 
-    private void handleRead(BluetoothGattCharacteristic ch, byte[] value, int status) {
+    private void handleRead(BluetoothGatt g, BluetoothGattCharacteristic ch, byte[] value, int status) {
+        if (!isCurrent(g)) return;
         Log.i(LOG_ID, "read " + ch.getUuid() + " status=" + status + " bytes=" + hex(value));
         ReadHandler h = pendingRead;
         pendingRead = null;
+        if(h==null) return;
         if (h != null && status == BluetoothGatt.GATT_SUCCESS && value != null) 
             h.accept(value);
         finishOp();
@@ -142,11 +148,12 @@ public class Si3GattCallback extends SuperGattCallback {
         if (ch == null) return;
         enqueue(() -> {
                     if(!enableNotification(mBluetoothGatt,ch))
-                        finishOp();
+                        operationFailed("GS3 notification subscription failed");
                 });
         }
 
     private void deliverNotification(@NonNull UUID uuid, byte[] value) {
+        if(!uuid.equals(CHAR_FF31_NOTIFY) || dataptr==0L || !connected || stop) return;
         if(value == null)  {
             Log.i(LOG_ID,"onCharacteristicChanged value==null");
             disconnect();
@@ -162,6 +169,10 @@ public class Si3GattCallback extends SuperGattCallback {
             } */
 	long tim = System.currentTimeMillis();
      GS3Data uit=gs3Glucose(dataptr,value,tim);
+     if(uit==null) {
+         operationFailed("GS3 native decoder unavailable");
+         return;
+     }
      if(uit.message!=null) {
             handshake=uit.message;
             }
@@ -174,7 +185,7 @@ public class Si3GattCallback extends SuperGattCallback {
             switch((int)(res&0xFFFFFL)) {
                 case 2: wrotepass[1] = tim;
                     if(uit.cmd==null)
-                        disconnect();
+                        operationFailed(handshake);
                     return;
                 case 1: return;
                 case 3: wrotepass[0] = tim;
@@ -187,7 +198,11 @@ public class Si3GattCallback extends SuperGattCallback {
 
     private void enqueue(@NonNull Runnable op) {
         synchronized (opQueue) {
-            opQueue.addLast(op);
+            final long generation=queueGeneration;
+            final BluetoothGatt g=mBluetoothGatt;
+            opQueue.addLast(() -> {
+                if(generation==queueGeneration && isCurrent(g)) op.run();
+            });
             if (!opInFlight) drain();
         }
     }
@@ -207,6 +222,29 @@ public class Si3GattCallback extends SuperGattCallback {
         }
     }
 
+    private boolean isCurrent(BluetoothGatt g) {
+        return g!=null && g==mBluetoothGatt && connected && !stop && dataptr!=0L;
+    }
+
+    private void resetOperations() {
+        synchronized(opQueue) {
+            ++queueGeneration;
+            opQueue.clear();
+            opInFlight=false;
+            pendingRead=null;
+            ff32Write=null;
+            notificationsEnabled=false;
+        }
+    }
+
+    private void operationFailed(String message) {
+        handshake=message;
+        Log.e(LOG_ID,message);
+        connected=false;
+        resetOperations();
+        disconnect();
+    }
+
 
     private static String utf8(byte[] v) {
         return v == null ? "" : new String(v, StandardCharsets.UTF_8).replace("\u0000", "");
@@ -223,36 +261,44 @@ public class Si3GattCallback extends SuperGattCallback {
 private boolean getinfo=doLog;
     @SuppressLint("MissingPermission")
     @Override public void onMtuChanged(BluetoothGatt g, int mtu, int status) {
+        if(!isCurrent(g)) return;
         Log.i(LOG_ID, "onMtuChanged mtu=" + mtu + " status=" + status);
-        g.discoverServices();
+        if(status==GATT_SUCCESS) negotiatedMtu=mtu;
+        if(!g.discoverServices()) operationFailed("GS3 discoverServices returned false");
        }
 
         @SuppressLint("MissingPermission")
         @Override public void onServicesDiscovered(BluetoothGatt g, int status) {
-            if (status != BluetoothGatt.GATT_SUCCESS) { fail("discoverServices " + status); return; }
+            if(!isCurrent(g)) return;
+            if (status != BluetoothGatt.GATT_SUCCESS) { operationFailed("discoverServices " + status); return; }
             Log.i(LOG_ID, "services discovered");
 
             BluetoothGattService cust = g.getService(CUSTOM_SERVICE_FF30);
             if(cust==null) {
-                Log.e(LOG_ID,"No  FF30 service,finish");
+                operationFailed("No GS3 FF30 service");
                 return;
                 }
             ff32Write = cust.getCharacteristic(CHAR_FF32_WRITE);
             BluetoothGattCharacteristic ff31 = cust.getCharacteristic(CHAR_FF31_NOTIFY);
+            if(ff32Write==null||ff31==null) {
+                operationFailed("GS3 FF31/FF32 characteristic missing");
+                return;
+            }
+
+            // These two reads select the protocol and the legacy registration.
+            // They are required in non-logging builds as well.
+            BluetoothGattService dis = g.getService(DEVICE_INFO_SERVICE);
+            if(dis!=null) {
+                queueRead(dis.getCharacteristic(CHAR_MANUFACTURER), v -> info.manufacturer=utf8(v));
+                queueRead(dis.getCharacteristic(CHAR_SW_REVISION), v -> info.softwareRevision=utf8(v));
+            }
 
             if(getinfo) {
-                BluetoothGattService dis  = g.getService(DEVICE_INFO_SERVICE);
                 if(dis!=null) {
-                    queueRead(dis.getCharacteristic(CHAR_MANUFACTURER), v -> {
-                        info.manufacturer    = utf8(v);
-                        if(info.manufacturer.endsWith("CN")) 
-                            Natives.isChinese(dataptr); 
-                        });
                     queueRead(dis.getCharacteristic(CHAR_MODEL_NUMBER), v -> info.modelNumber     = utf8(v));
                     queueRead(dis.getCharacteristic(CHAR_SYSTEM_ID),    v -> info.systemId        = v);
                     queueRead(dis.getCharacteristic(CHAR_FW_REVISION),  v -> info.firmwareRevision= utf8(v));
                     queueRead(dis.getCharacteristic(CHAR_HW_REVISION),  v -> info.hardwareRevision= utf8(v));
-                    queueRead(dis.getCharacteristic(CHAR_SW_REVISION),  v -> info.softwareRevision= utf8(v));
                     queueRead(dis.getCharacteristic(CHAR_SERIAL_NUMBER_VENDOR), v -> info.serialVendor    = utf8(v));
                     }
                  else {
@@ -283,11 +329,20 @@ private boolean getinfo=doLog;
                             Log.i(LOG_ID, "serialVendor(2abe)=" + info.serialVendor);
                             getinfo=false;
                             }
-                Applic.getHandler().post(() -> {
-                  final var bytes=Natives.siAuthBytes(dataptr);
-                  if(bytes!=null)
-                      write2(bytes);
-                });
+                if(!notificationsEnabled) {
+                    operationFailed("GS3 notifications were not enabled");
+                    return;
+                }
+                // resetdataptr/rescanning can replace the native sensor record.
+                // Always use the address belonging to this connected GATT.
+                setDeviceAddress(g.getDevice().getAddress());
+                Natives.gs3SetDeviceInfo(dataptr,info.manufacturer,info.softwareRevision);
+                final var bytes=Natives.siAuthBytes(dataptr);
+                if(bytes==null) {
+                    operationFailed("GS3 could not construct authentication");
+                    return;
+                }
+                write2(bytes);
                 finishOp();
             });
 
@@ -296,38 +351,50 @@ private boolean getinfo=doLog;
 
         @Override public void onCharacteristicRead(@NonNull BluetoothGatt g, @NonNull BluetoothGattCharacteristic ch,
                                                    @NonNull byte[] value, int status) {
-            handleRead(ch, value, status);
+            handleRead(g, ch, value, status);
         }
         @SuppressWarnings("deprecation")
         @Override public void onCharacteristicRead(BluetoothGatt g,
                                                    BluetoothGattCharacteristic ch, int status) {
-            handleRead(ch, ch.getValue(), status);
+            handleRead(g, ch, ch.getValue(), status);
         }
 
         @Override public void onDescriptorWrite(BluetoothGatt g,
                                                 BluetoothGattDescriptor d, int status) {
+            if(!isCurrent(g)) return;
             Log.i(LOG_ID, "descriptor write " + d.getUuid() + " status=" + status);
+            if(status!=GATT_SUCCESS) {
+                operationFailed("GS3 descriptor write failed: "+status);
+                return;
+            }
+            if(d.getCharacteristic().getUuid().equals(CHAR_FF31_NOTIFY)) notificationsEnabled=true;
             finishOp();
         }
 
 	@Override
 	public void onCharacteristicWrite(BluetoothGatt bluetoothGatt, BluetoothGattCharacteristic bluetoothGattCharacteristic, int status) {
+       if(!isCurrent(bluetoothGatt)) return;
        if(doLog)
           showCharacter(LOG_ID+" onCharacteristicWrite " + bluetoothGatt.getDevice().getAddress() + " status:" + status + " ", bluetoothGattCharacteristic);
 
 
-//        handshake = "wrote " +bluetoothGattCharacteristic.getValue().length;
+        if(status!=GATT_SUCCESS) {
+            operationFailed("GS3 characteristic write failed: "+status);
+            return;
+        }
         finishOp();
 	    }
 
         @Override public void onCharacteristicChanged(@NonNull BluetoothGatt g,
                                                       BluetoothGattCharacteristic ch,
                                                       @NonNull byte[] value) {
+            if(!isCurrent(g)) return;
             deliverNotification(ch.getUuid(), value);
         }
         @SuppressWarnings("deprecation")
         @Override public void onCharacteristicChanged(BluetoothGatt g,
                                                       BluetoothGattCharacteristic ch) {
+            if(!isCurrent(g)) return;
             deliverNotification(ch.getUuid(), ch.getValue());
         }
 
@@ -348,12 +415,21 @@ private boolean getinfo=doLog;
         }
         if(newState == BluetoothProfile.STATE_CONNECTED) {
 			constatchange[0] = tim;
-            bluetoothGatt.requestMtu(MTU_REQUEST);
+            resetOperations();
+            negotiatedMtu=23;
+            info.manufacturer=null;
+            info.softwareRevision=null;
+            getinfo=doLog;
             connected=true;
+            setDeviceAddress(bluetoothGatt.getDevice().getAddress());
+            Natives.gs3SetDeviceInfo(dataptr,null,null);
+            if(!bluetoothGatt.requestMtu(MTU_REQUEST) && !bluetoothGatt.discoverServices())
+                operationFailed("GS3 could not start service discovery");
             Natives.EverSenseClear(dataptr);
         } else {
             connected=false;
             if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+               resetOperations();
 		   if(!autoconnect) {
 			   if(!closeCurrentGatt(bluetoothGatt))
 			       return;
@@ -384,17 +460,27 @@ private boolean getinfo=doLog;
 @SuppressLint("MissingPermission")
 
 private boolean write2(byte[] bytes) {
-   if(ff32Write==null) {
-      disconnect();
-      return false;
-      }
-        
-   ff32Write.setValue(bytes);
-    var blue=mBluetoothGatt;
-    if(blue!=null)
-       return blue.writeCharacteristic(ff32Write);
-    else disconnect();
-    return false;
+    if(bytes==null||ff32Write==null||!isCurrent(mBluetoothGatt)) return false;
+    final byte[] value=bytes.clone();
+    enqueue(() -> {
+        final boolean v3=Natives.gs3IsV3(dataptr);
+        if(v3 && negotiatedMtu<value.length+3) {
+            operationFailed("GS3 V3 MTU too small: "+negotiatedMtu);
+            return;
+        }
+        final int properties=ff32Write.getProperties();
+        if(v3&&(properties&BluetoothGattCharacteristic.PROPERTY_WRITE)==0) {
+            operationFailed("GS3 V3 Write Request is not supported");
+            return;
+        }
+        final int type=v3 || (properties&BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE)==0
+            ? BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            : BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE;
+        ff32Write.setWriteType(type);
+        if(!ff32Write.setValue(value)||!mBluetoothGatt.writeCharacteristic(ff32Write))
+            operationFailed("GS3 writeCharacteristic returned false");
+    });
+    return true;
    }
 
 
@@ -403,6 +489,7 @@ private boolean write2(byte[] bytes) {
 
 @Override
 public void onReadRemoteRssi(BluetoothGatt gatt, int rssi, int status)  {
+    if(!isCurrent(gatt)) return;
 	{if(doLog) {Log.i(LOG_ID,"onReadRemoteRssi(BluetoothGatt,"+ rssi+","+status+(status==GATT_SUCCESS?" SUCCESS":" FAILURE"));};};
 	if(status==GATT_SUCCESS) {
 		readrssi=rssi;
@@ -418,6 +505,7 @@ public boolean matchDeviceName(String deviceName,String address) {
 	final var devlen=deviceName.length();
     final var serlen=SerialNumber.length();
     final int matchlen=6;
+    if(devlen<matchlen||serlen<matchlen) return false;
 	if(SerialNumber.regionMatches(serlen-matchlen,deviceName, devlen-matchlen,matchlen)) {
 	      Natives.siSaveDeviceName(dataptr,deviceName);
 	      return true;
@@ -427,8 +515,17 @@ public boolean matchDeviceName(String deviceName,String address) {
 
 @Override
 public void free() {
+    connected=false;
+    resetOperations();
 	super.free();
 	}
+
+@Override
+public long resetdataptr() {
+    connected=false;
+    resetOperations();
+    return super.resetdataptr();
+}
 
 
 private int tries=1;

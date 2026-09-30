@@ -96,6 +96,74 @@ import static tk.glucodata.util.getlocale;
 
 public class Libreview  {
    private static final String LOG_ID="Libreview";
+private static final Object libreReceiverLock=new Object();
+private static boolean libreReceiverBusy=false;
+private static volatile String libreReceiverError="";
+
+public static long getlibreReceiverID() {
+   long id=Natives.getnewLibre3ReceiverID();
+   return id>=0L && id<=0xffffffffL?id:-1L;
+   }
+public static boolean hasLibreReceiverID() { return getlibreReceiverID()>=0L; }
+public static String getLibreReceiverError() { return libreReceiverError; }
+public static void invalidateLibreReceiverID() {
+   Natives.setnewLibre3ReceiverIDreceived(false);
+   }
+private static boolean libreReceiverFailed(String message) {
+   libreReceiverError=message;
+   Log.e(LOG_ID,"Libre receiver ID: "+message);
+   return false;
+   }
+
+// Blocking; use after legacy authentication, on a worker thread, not during NFC.
+@Keep
+public static boolean retrieveLibreReceiverID() {
+   final long generation;
+   final String email,token,applicationId;
+   synchronized(libreReceiverLock) {
+      if(hasLibreReceiverID()) return true;
+      if(libreReceiverBusy) return libreReceiverFailed("Retrieval already in progress");
+      generation=Natives.getnewLibre3ReceiverGeneration();
+      email=getlibreemail();
+      token=Natives.getlibreUserToken(true);
+      applicationId=Natives.getlibreDeviceID(true);
+      if(email==null || email.isEmpty() || token==null || token.isEmpty())
+         return libreReceiverFailed("Authenticate the configured Libre 3 account first");
+      libreReceiverBusy=true;
+      libreReceiverError="";
+      }
+   try {
+      LibreReceiverApi api=new LibreReceiverApi(Applic.app);
+      String validated=api.validate(token,email);
+      if(generation!=Natives.getnewLibre3ReceiverGeneration())
+         return libreReceiverFailed("Account changed during validation; conversion was not sent");
+      String receiver=api.convert(validated,applicationId);
+      long id=LibreReceiverApi.receiverNumber(receiver);
+      if(!Natives.savenewLibre3ReceiverID(id,generation))
+         return libreReceiverFailed("Account changed during conversion; its result was not saved");
+      libreReceiverError="";
+      return true;
+      }
+   catch(Exception | LinkageError ex) {
+      return libreReceiverFailed(ex.getClass().getSimpleName()+": "+ex.getMessage());
+      }
+   finally {
+      synchronized(libreReceiverLock) { libreReceiverBusy=false; }
+      }
+   }
+   /*
+private static boolean testLibreReceiverCrypto() {
+   if(android.os.Looper.myLooper()==android.os.Looper.getMainLooper())
+      return libreReceiverFailed("Crypto selftest must run on a worker thread");
+   try {
+      LibreReceiverApi.selftest(Applic.app);
+      return true;
+      }
+   catch(Exception | LinkageError ex) {
+      return libreReceiverFailed(ex.getClass().getSimpleName()+": "+ex.getMessage());
+      }
+   }
+*/
 private static String getputtext(String sensorid,String usertoken,String gateway) {
  return "{\"DomainData\":\"{\\\"activeSensor\\\":\\\""+sensorid+"\\\"}\",\"UserToken\":\""+usertoken +"\",\"Domain\":\"Libreview\",\"GatewayType\":\""+gateway+"\"}";
  }
@@ -400,6 +468,13 @@ static boolean postmeasurements(byte[] measurementdata) {
 static String posttime=null;
 @Keep
 static boolean postmeasurements(boolean libre3,byte[] measurementdata) {
+/*
+    if(!Libreview.testLibreReceiverCrypto()) {
+        Log.e("LibreReceiver", Libreview.getLibreReceiverError());
+      }
+   else
+        Log.i("LibreReceiver", "Crypto self-test: PASS");
+*/
    lastFailurePermanent=false;
    String nowstr=datestr(System.currentTimeMillis());
    if(librestatus==nothing||librestatus==success)
@@ -637,11 +712,6 @@ private static void resendDateDialog(MainActivity context,View parent) {
    int[]  min={cal.get(Calendar.MINUTE)};
    var timebutton=getbutton(context,  String.format(Locale.US,"%02d:%02d",hour[0],min[0] ));
    var layout=new Layout(context,(x,w,h)->{
-   /*
-         var width=GlucoseCurve.getwidth();
-         x.setX((width-w)/2);
-         x.setY(MainActivity.systembarTop);
-         */
          return new int[] {w,h};
            },new View[]{helpbutton,sendfrom},new View[]{datebutton,timebutton},new View[]{ok,cancel});
    timebutton.setOnClickListener(v-> {
@@ -864,21 +934,16 @@ public static void  config(MainActivity act, View settingsview,CheckDirectionBox
    long accountidnum=Natives.getlibreAccountIDnumber();
    var accountid=getlabel(act, String.valueOf(accountidnum));
    var getaccountid=getbutton(act,R.string.getaccountid);
+   var newLibre3=getcheckbox(act,"New Libre app",Natives.getnewLibre3Activation());
+   newLibre3.setOnCheckedChangeListener( (buttonView,  isChecked) -> {
+       Natives.setnewLibre3Activation(isChecked);
+      });
+   long recid=getlibreReceiverID();
+   var receiverIdstr=getlabel(act,""+recid);
    final Layout layout=new Layout(act, (lay, w, h) -> {
-   /*
-      var height=GlucoseCurve.getheight();
-      var width=GlucoseCurve.getwidth();
-      if(w>=width||h>=height) {
-            lay.setX(0);
-            }
-       else {
-            lay.setX((width-w)/2); 
-            };
-       lay.setY(MainActivity.systembarTop);
-       */
        return new int[] {w,h};}, 
-                new View[]{emaillabel,email},new View[]{passlabel,editpass,russia},new View[]{clear,accountid,getaccountid},new View[]{statusview},new View[]{ librecurrent,libreisviewed}, new View[]{sendtolibreview,numbers},new View[]{send,help,cancel,ok});
-    layout.portraitLayout(new View[]{emaillabel,email},new View[]{passlabel,editpass},new View[]{accountid,getaccountid},new View[]{statusview},new View[]{ librecurrent,libreisviewed}, new View[]{sendtolibreview,numbers},
+                new View[]{emaillabel,email},new View[]{passlabel,editpass,russia},new View[]{clear,accountid,getaccountid},new View[]{statusview},new View[]{ librecurrent,newLibre3,receiverIdstr}, new View[]{sendtolibreview,libreisviewed,numbers},new View[]{send,help,cancel,ok});
+    layout.portraitLayout(new View[]{emaillabel,email},new View[]{passlabel,editpass},new View[]{accountid,getaccountid},new View[]{newLibre3,receiverIdstr},new View[]{statusview},new View[]{ librecurrent,libreisviewed}, new View[]{sendtolibreview,numbers},
 new View[]{russia,clear,help},
     new View[]{send,cancel,ok});
 

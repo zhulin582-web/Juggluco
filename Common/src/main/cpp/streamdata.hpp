@@ -47,12 +47,14 @@ struct airstream:streamdata {
 #endif
 #ifdef SIBIONICS
 #include "sibionics/SiContext.hpp"
+#include "sibionics3/v3session.hpp"
 struct sistream:streamdata {
     SiContext sicontext;
     sistream(int sensindex,SensorGlucoseData *sens): streamdata(0x10, sensindex,sens),sicontext(sens){ };
     };
 
 struct si3stream:streamdata {
+    gs3v3::Session gs3;
     si3stream(SensorGlucoseData *sens): streamdata(0x15, sens->sensorIndex,sens){ };
     };
 #endif

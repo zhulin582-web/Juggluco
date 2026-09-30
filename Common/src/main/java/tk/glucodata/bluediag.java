@@ -168,23 +168,8 @@ static void showsensormessage(String text,MainActivity act) {
          });
 
     var  params = new FrameLayout.LayoutParams( WRAP_CONTENT, WRAP_CONTENT, Gravity.CENTER| Gravity.CENTER_HORIZONTAL);
-//    params.topMargin=MainActivity.systembarTop;
     act.addMyContentView(layout, params);
     }
-/*
-public static void showsensorinfo(String text,MainActivity act) {
-       var width=GlucoseCurve.getwidth();
-        help.basehelp(text,act,xzy->{
-        }, (l,w,h)-> {
-                var height=GlucoseCurve.getheight();
-                if(height>h)
-                    l.setY((height-h)/2);
-                if(width>w)
-                    l.setX((width-w)/2);
-            return new int[] {w,h};
-            }, new ViewGroup.MarginLayoutParams(WRAP_CONTENT, WRAP_CONTENT));
-        }
-*/
 void showinfo(final SuperGattCallback gatt,MainActivity act) {
     if(isWearable)  {
         disconnectsensor.setVisibility(gatt.sensorgen==3?VISIBLE:GONE);
@@ -402,51 +387,7 @@ help.setOnClickListener(v-> helplight(R.string.sensorhelp,act));
     act.addMyContentView(layout, params);
 
    }
-   /*
-void nogatts(MainActivity act) {
- var bluestate= getlabel(act, mBluetoothAdapter==null?activity.getString(R.string.nobluetooth):(mBluetoothAdapter.isEnabled()?activity.getString(R.string.bluetoothenabled): activity.getString(R.string.bluetoothdisabled)));
- final boolean wasused= Natives.getusebluetooth();
- var usebluetooth=getcheckbox(act, R.string.use_bluetooth,wasused);
-    usebluetooth.setOnCheckedChangeListener(
-         (buttonView,  isChecked) -> {
-             {if(doLog) {Log.i(LOG_ID,"usebluetooth "+isChecked);};};
-             if(isChecked!=wasused) {
-                 act.setbluetoothmain( isChecked);
-                 act.requestRender();
-                 act.doonback();
-                 start(act);
-             }
-         });
-    var close=getbutton(act,R.string.closename);
-   var height=GlucoseCurve.getheight();
-   var width=GlucoseCurve.getwidth();
-   if(!useclose)
-      close.setVisibility(GONE);
-  Layout layout = new Layout(act, (l, w, h) -> {
-      l.setX((width-w)/2);
-      l.setY((height-h)/2);
-        int[] ret={w,h};
-        return ret;
-        },new View[]{bluestate},new View[]{usebluetooth},new View[]{close});
-    act.setonback(() -> {
-            removeContentView(layout);
-            });
-
-        close.setOnClickListener(v -> {
-         act.doonback();
-         });
-      layout.setBackgroundResource(R.drawable.dialogbackground);
-    int pads=(int)(GlucoseCurve.metrics.density*(isWearable?2:10));
-   {if(doLog) {Log.i(LOG_ID,"density="+GlucoseCurve.metrics.density);};};
-
-      if(!isWearable)
-          bluestate.setPadding(pads,0,0,0);
-      layout.setPadding(pads,pads,pads*3,pads);
-   act.addMyContentView(layout, new ViewGroup.LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
-
-   }
-   */
-
+/*
 private static boolean phonePortrait(View view) {
     // The overlay itself is not recreated when MainActivity handles rotation.
     // Prefer the current visible window and use Configuration as fallback.
@@ -463,12 +404,13 @@ private static boolean phonePortrait(View view) {
     return view.getResources().getConfiguration().orientation==
             android.content.res.Configuration.ORIENTATION_PORTRAIT;
 }
-
+*/
 /*
  * Do not reuse MainActivity.systembarLeft/... here.  Those values can still
  * describe the previous orientation while this overlay remains alive.  The
  * visible display frame belongs to the window in its current orientation.
  */
+ /*
 private static void updatePhoneOverlayParams(View view, FrameLayout.LayoutParams params, boolean portrait) {
     if(view==null || params==null)
         return;
@@ -529,7 +471,7 @@ private static void updatePhoneOverlayParams(View view, FrameLayout.LayoutParams
         view.setLayoutParams(params);
     }
 }
-
+*/
 private static int dp(float value) {
     return (int)(GlucoseCurve.metrics.density*value+0.5f);
 }
@@ -624,30 +566,35 @@ bluediag(MainActivity act,final ArrayList<SuperGattCallback> gatts) {
                 (buttonView,isChecked)->Natives.setDisconnectSensor(isChecked));
         clear.setVisibility(GONE);
         bluestate.setPaddingRelative(0,0,dp(5),0);
+       diagnosticGrid.setLayoutParams( new ViewGroup.MarginLayoutParams(MATCH_PARENT,WRAP_CONTENT));
 
+        Layout.getMargins(info).rightMargin=(int)(GlucoseCurve.getwidth()*.1);
         content=new Layout(act,
-                new View[]{usebluetooth,bluestate,sensorAction,priority,disconnectsensor,android13},
+                new View[]{bluestate,usebluetooth,sensorAction,priority,disconnectsensor,info},
                 new View[]{scanview},
-                new View[]{spin,address,forget,streaming,clear,info},
+                new View[]{spin,address,forget,streaming,clear,android13},
                 new View[]{diagnosticGrid},
                 new View[]{rssiview,close});
         content.setPadding(dp(30),dp(18),dp(8),dp(30));
 
-        androidx.core.widget.NestedScrollView vertical=
-                new androidx.core.widget.NestedScrollView(act);
+        //androidx.core.widget.NestedScrollView vertical= new androidx.core.widget.NestedScrollView(act);
+        androidx.core.widget.NestedScrollView vertical = new androidx.core.widget.NestedScrollView(act, null, android.R.attr.scrollViewStyle);
+        vertical.addView(content,new ViewGroup.LayoutParams(WRAP_CONTENT,WRAP_CONTENT));
+
         vertical.setFillViewport(true);
         vertical.setVerticalScrollBarEnabled(true);
         vertical.setScrollbarFadingEnabled(false);
-        vertical.addView(content,new ViewGroup.LayoutParams(WRAP_CONTENT,WRAP_CONTENT));
 
         HorizontalScrollView horizontal=new HorizontalScrollView(act);
+
+        horizontal.addView(vertical,new ViewGroup.LayoutParams(MATCH_PARENT,MATCH_PARENT));
+
         horizontal.setFillViewport(true);
         horizontal.setSmoothScrollingEnabled(false);
         horizontal.setVerticalScrollBarEnabled(false);
         horizontal.setHorizontalScrollBarEnabled(Applic.horiScrollbar);
         horizontal.setScrollBarFadeDuration(0);
         horizontal.setMinimumHeight(GlucoseCurve.getheight());
-        horizontal.addView(vertical,new ViewGroup.LayoutParams(MATCH_PARENT,MATCH_PARENT));
         showview=horizontal;
         showview.setBackgroundColor(Applic.backgroundcolor); //??
     }
@@ -660,7 +607,7 @@ bluediag(MainActivity act,final ArrayList<SuperGattCallback> gatts) {
         diagnosticScroll.setSmoothScrollingEnabled(false);
         diagnosticScroll.setHorizontalScrollBarEnabled(Applic.horiScrollbar);
         diagnosticScroll.setScrollBarFadeDuration(0);
-        diagnosticScroll.addView(diagnosticGrid, new ViewGroup.LayoutParams(WRAP_CONTENT,WRAP_CONTENT));
+        diagnosticScroll.addView(diagnosticGrid,new ViewGroup.MarginLayoutParams(WRAP_CONTENT,WRAP_CONTENT));
         diagnosticScroll.setLayoutParams( new ViewGroup.MarginLayoutParams(MATCH_PARENT,WRAP_CONTENT));
 
         content=new Layout(act,
@@ -896,12 +843,7 @@ bluediag(MainActivity act,final ArrayList<SuperGattCallback> gatts) {
 
 
 //    var  params = new FrameLayout.LayoutParams( MATCH_PARENT, MATCH_PARENT, Gravity.CENTER|Gravity.CENTER_HORIZONTAL);
-    final boolean phonePortraitNow=!isWearable && phonePortrait(showview);
-    var  params = new FrameLayout.LayoutParams(
-            isWearable?WRAP_CONTENT:MATCH_PARENT,
-            WRAP_CONTENT,
-            phonePortraitNow?(Gravity.TOP|Gravity.CENTER_HORIZONTAL):
-                             (Gravity.CENTER|Gravity.CENTER_HORIZONTAL));
+    var  params = new FrameLayout.LayoutParams(isWearable?WRAP_CONTENT:MATCH_PARENT, WRAP_CONTENT, Gravity.CENTER|Gravity.CENTER_HORIZONTAL);
     if(isWearable) {
         params.topMargin=(int)(MainActivity.systembarTop*.3f);
         params.bottomMargin=(int)(MainActivity.systembarBottom*.3f);

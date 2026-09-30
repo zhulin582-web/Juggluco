@@ -320,10 +320,12 @@ private void recover(BluetoothGatt gatt,String reason,boolean wasWorking,long mi
         spacing=0L;
         }
     else {
-        failedAttempts=Math.min(failedAttempts+1,5);
-        spacing=Math.min(60000L,5000L << (failedAttempts-1));
+        failedAttempts=Math.min(failedAttempts+1,3);
+        spacing=5000L << (failedAttempts-1); // 5, 10, then 20 seconds.
         }
     // Space attempt starts, crediting time already spent in a slow failure.
+    // Do not grow this to a full sensor minute: a 30-second connection timeout
+    // plus 30 seconds waiting can repeatedly miss the same advertising window.
     long delay=Math.max(minimumDelay,Math.max(0L,spacing-elapsed));
     info("session="+session+" failures="+failedAttempts+" retry in "+delay+"ms");
     phase="retry";
@@ -396,8 +398,8 @@ private void connectionStartFailed(String reason) {
     close();
     setfailure(reason);
     if(!receptionEnabled()) return;
-    failedAttempts=Math.min(failedAttempts+1,5);
-    long delay=Math.min(60000L,5000L << (failedAttempts-1));
+    failedAttempts=Math.min(failedAttempts+1,3);
+    long delay=5000L << (failedAttempts-1);
     phase="retry";
     info("session="+session+" "+reason+"; retry in "+delay+"ms");
     scheduleRecoveryEvent(delay,this::startConnection);
@@ -877,7 +879,7 @@ private int commandphase=1;
 private void setCertificate140() {
     {if(doLog) {Log.i(LOG_ID, SerialNumber + ": "+"setCertificate140");};};
     cryptolib.setPatchCertificate(securityContext,rdtData);
-    Libre3Emulator.captureCertificate(SerialNumber,rdtData);
+//    Libre3Emulator.captureCertificate(SerialNumber,rdtData);
     if(sendSecurityCommand( (byte)0x0D)) {
         commandphase=4;
         }
@@ -945,8 +947,8 @@ private  void logcharacter(UUID uuid,String str,byte[] value) {
 
 @Override 
 public synchronized void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, byte[] value) {
-       if(!checkBluetoothGatt(gatt)) return;
        final long nowmsec= System.currentTimeMillis();
+       if(!checkBluetoothGatt(gatt)) return;
        PowerManager.WakeLock wakelock=null;
        try {
            if(Applic.usewakelock) {

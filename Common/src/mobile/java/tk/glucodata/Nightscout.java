@@ -230,6 +230,9 @@ public static void show(MainActivity context,View parent) {
 	UploadWeb.setText(R.string.webuploadpages);
 	UploadWeb.setOnClickListener(v->WebPageUpload.show(context));
 
+	var askChatGPT=getbutton(context,"Ask ChatGPT");
+	askChatGPT.setOnClickListener(v -> JugglucoChat.show(context));
+
 	var Close=getbutton(context,R.string.closename);
 
 	var usexdripserver=Natives.getusexdripwebserver();
@@ -263,7 +266,7 @@ public static void show(MainActivity context,View parent) {
 	var errorrow=errstr.length()>0?new View[]{getlabel(context,errstr)}:null;
 	var layout=new Layout(context,(l,w,h)-> {
 		return new int[] {w,h};
-		},new View[]{secret,visible},new View[]{editkey},new View[]{labhttpport,httpportview,labport,portview},new View[]{local,save,labinterval,intervalview},new View[]{sslbox,privkey,chain},new View[]{treatments,UploadWeb},errorrow,new View[]{Help,server,Close} );
+		},new View[]{secret,visible},new View[]{editkey},new View[]{labhttpport,httpportview,labport,portview},new View[]{local,save,labinterval,intervalview},new View[]{sslbox,privkey,chain},new View[]{treatments,UploadWeb},new View[]{askChatGPT},errorrow,new View[]{Help,server,Close} );
 
 	treatments.setOnCheckedChangeListener( (buttonView,  isChecked) -> {
 		switch(nochangeamounts[0])  {

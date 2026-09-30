@@ -34,6 +34,7 @@
 #include "streamdata.hpp" 
 #include "fromjava.h"
 #include "share/hexstr.hpp"
+#include "deviceaddress.hpp"
 
 /*
 static int8_t oneel(const char *start) {
@@ -53,9 +54,11 @@ auto deviceArray(std::string_view address) {
 	} */
 
 std::array<int8_t,6>  deviceArray(const char address[]) {
-   std::array<int8_t,6> uitar;
-   auto *uit=uitar.data();
-   sscanf(address,"%hhX:%hhX:%hhX:%hhX:%hhX:%hhX",uit+5,uit+4,uit+3,uit+2,uit+1,uit);
+   std::array<int8_t,6> uitar{};
+   std::array<uint8_t,6> parsed{};
+   if(address&&sibionicsAddress(address,parsed)) {
+       for(unsigned i=0;i<6;++i) uitar[i]=static_cast<int8_t>(parsed[5-i]);
+   }
    return uitar;
    }
 
@@ -129,6 +132,8 @@ extern "C" JNIEXPORT jbyteArray JNICALL   fromjava(siAsknewdata)(JNIEnv *env, jc
 #endif
    {
 	   const auto address=usedhist->deviceaddress();
+       std::array<uint8_t,6> checked;
+       if(!address||!sibionicsAddress(address,checked)) return nullptr;
 	   const auto codes=makeWriteCharacter(index,address);
 	   const auto *data=codes.data();
 	   const int len=codes.size();

@@ -30,9 +30,35 @@
 #include "logs.hpp"
 #include "datbackup.hpp"
 
-extern jlong gs3Glucose(SensorGlucoseData *sens,std::vector<uint8_t> &vect,std::string &message,const uint8_t* in_packet, int in_len, uint32_t &nowsecs);
+extern jlong gs3Glucose(si3stream &stream,std::vector<uint8_t> &vect,std::string &message,const uint8_t* in_packet, int in_len, uint32_t &nowsecs);
 
 #define javapackage "tk/glucodata/"
+
+extern "C" JNIEXPORT void JNICALL fromjava(gs3SetDeviceInfo)(JNIEnv *env,jclass,jlong dataptr,jstring manufacturer,jstring software) {
+    if(!dataptr) return;
+    auto *stream=reinterpret_cast<si3stream *>(dataptr);
+    stream->gs3={};
+    if(software) {
+        const char *text=env->GetStringUTFChars(software,nullptr);
+        stream->gs3.v3=strstr(text,"_V3.")!=nullptr;
+        env->ReleaseStringUTFChars(software,text);
+    }
+    // siType 4/5 remains a legacy regional choice, not a protocol version.
+    // A short NFC record alone does not establish that a sensor is Chinese.
+    if(manufacturer) {
+        const char *text=env->GetStringUTFChars(manufacturer,nullptr);
+        std::string_view name(text);
+        if(name.ends_with("GNL")) stream->gs3.legacySubtype=4;
+        else if(name.ends_with("CN")) stream->gs3.legacySubtype=5;
+        env->ReleaseStringUTFChars(manufacturer,text);
+    }
+    if(const auto *last=stream->hist->lastValidStream())
+        stream->gs3.restore(last->getid(),last->gettime());
+}
+
+extern "C" JNIEXPORT jboolean JNICALL fromjava(gs3IsV3)(JNIEnv *,jclass,jlong dataptr) {
+    return dataptr&&reinterpret_cast<si3stream *>(dataptr)->gs3.v3;
+}
 
 
 extern "C" JNIEXPORT void JNICALL   fromjava(isChinese)(JNIEnv *env, jclass cl,jlong dataptr) {
@@ -47,7 +73,8 @@ extern "C" JNIEXPORT jobject JNICALL   fromjava(gs3Glucose)(JNIEnv *env, jclass 
             LOGAR("gs3Glucose value==null");
             return nullptr;
             }
-       auto *sdata=reinterpret_cast<streamdata *>(dataptr);
+       auto *sdata=reinterpret_cast<si3stream *>(dataptr);
+       if(!sdata||!sdata->hist) return nullptr;
        std::vector<uint8_t> vect;
        std::string message;
        uint32_t nowsecs;
@@ -56,7 +83,7 @@ extern "C" JNIEXPORT jobject JNICALL   fromjava(gs3Glucose)(JNIEnv *env, jclass 
         const CritAr<uint8_t>  bluedata(env,value);
         const auto arlen=env->GetArrayLength(value);
         nowsecs=mmsec/1000;
-        result=gs3Glucose(sdata->hist,vect,message,bluedata.data(),arlen,  nowsecs);
+        result=gs3Glucose(*sdata,vect,message,bluedata.data(),arlen,nowsecs);
         }
        const int uitlen=(int)vect.size();
        jbyteArray jcmd;
@@ -111,14 +138,18 @@ extern "C" JNIEXPORT jstring JNICALL   fromjava(gs3nfc)(JNIEnv *env, jclass cl, 
      {
        const CritAr<char>  scan(env,jscan);
        const char *buf=scan.data();
+       const int size=env->GetArrayLength(jscan);
+       if(size<1) return nullptr;
        const int status = buf[0] & 0xFF;
-       const int startpos = 1+ status & 0x3F;
-       const size_t len=env->GetArrayLength(jscan)-startpos;
+       const int startpos = 1+(status & 0x3F);
+       if(startpos>size) return nullptr;
+       const size_t len=size-startpos;
        const char *start=buf+startpos;
        LOGGER("gs3nfc %.*s\n",len,start);
      std::string_view scanview(start,len);
      const char *blueToothNum;
      int siType;
+     if(len<6) return nullptr;
      if(!memcmp("GS3",start+3,3)) {
          std::string_view deviceName=nth_field(scanview,3, ',');
          int devlen=deviceName.size();
@@ -135,8 +166,11 @@ extern "C" JNIEXPORT jstring JNICALL   fromjava(gs3nfc)(JNIEnv *env, jclass cl, 
         LOGGER("device name %.*s blueToothNum %.*s\n",deviceName.size(),deviceName.data(),6,blueToothNum);
         }
      else {
+        // Keep the existing stored subtype; metadata/authentication selects V3.
+        const auto suffix=nth_field(scanview,3,',');
+        if(suffix.size()!=6) return nullptr;
         siType=5;
-        blueToothNum=scanview.end()-6;
+        blueToothNum=suffix.data();
         }
      auto [sensorindex,sensin]= sensors->genMakeSI3sensorIndex(blueToothNum,scanview,time(nullptr),siType);
      sens=sensin;
@@ -153,10 +187,14 @@ extern "C" JNIEXPORT jstring JNICALL   fromjava(gs3nfc)(JNIEnv *env, jclass cl, 
     }
 
 extern "C" JNIEXPORT void  JNICALL   fromjava(saveGS3id)(JNIEnv *env, jclass cl,jlong id) {
-    *reinterpret_cast<uint64_t*>(settings->data()->gs3id)=std::byteswap(id);
+    const uint64_t bigendian=std::byteswap(static_cast<uint64_t>(id));
+    memcpy(settings->data()->gs3id,&bigendian,sizeof(bigendian));
+    memset(settings->data()->gs3id+sizeof(bigendian),0,4);
     settings->updated();
     }
 extern "C" JNIEXPORT jlong  JNICALL   fromjava(getGS3id)(JNIEnv *env, jclass cl) {
-    return std::byteswap(*reinterpret_cast<uint64_t*>(settings->data()->gs3id));
+    uint64_t bigendian;
+    memcpy(&bigendian,settings->data()->gs3id,sizeof(bigendian));
+    return std::byteswap(bigendian);
     }
 #endif

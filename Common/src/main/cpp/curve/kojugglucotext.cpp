@@ -163,7 +163,7 @@ jugglucotext kotext {
     .libre3scanerror={"FreeStyle Libre 3, 스캔 오류",
         "다시 시도하십시오"},
     .libre3wrongID={"오류, 계정 ID가 잘못되었습니까?",
-        R"(센서를 활성화할 때 사용한 것과 같은 ID여야 합니다. LibreView에서 가져오려면 왼쪽 메뉴→설정→데이터 교환→LibreView→"계정 ID 가져오기"로 이동하십시오.)"},
+        R"(센서를 활성화할 때 사용한 것과 같은 ID여야 합니다. LibreView에서 가져오려면 왼쪽 메뉴->설정->데이터 교환->LibreView->"계정 ID 가져오기"로 이동하십시오.)"},
     .libre3scansuccess= {"FreeStyle Libre 3 센서",
         "이제 Juggluco가 혈당값을 수신합니다"},
     .unknownNFC={"인식할 수 없는 NFC 스캔 오류",
@@ -171,7 +171,7 @@ jugglucotext kotext {
     .nolibre3={"FreeStyle Libre 3 센서",
         "https://www.juggluco.nl/download.html 에서 올바른 버전을 받으십시오"},
     .libre3zeroID={"오류, 계정 ID가 0입니까?",
-        R"(0이 아닌 계정 ID를 설정하려면 왼쪽 메뉴→설정→데이터 교환→LibreView→"계정 ID 가져오기"를 사용하십시오.)"},
+        R"(0이 아닌 계정 ID를 설정하려면 왼쪽 메뉴->설정->데이터 교환->LibreView->"계정 ID 가져오기"를 사용하십시오.)"},
     .needsandroid8="최소 Android 8 필요"sv,
 #ifndef WEAROS
     .advancedstart= R"(<h1>수정된 기기</h1>

@@ -53,7 +53,7 @@ struct firstnfc {
 struct nfc1 {
     uint8_t nfcbuf[50+sizeof(firstnfc)];
 	firstnfc *nfcptr;
-	bool error;
+	bool error{};
 	const std::string_view getSerialNumber() const {
  		return std::string_view(nfcptr->serialnumber,9);
 		}

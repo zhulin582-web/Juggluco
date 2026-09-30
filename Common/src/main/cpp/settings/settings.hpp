@@ -425,7 +425,11 @@ struct Tings {
     uint32_t reserved4;
     GlucoseMeter  glucosemeters[maxglucosemeters];
     uint8_t gs3id[12];
-    uint32_t reserved32;
+    bool reserved8b;
+    bool newLibre3ReceiverIDreceived;
+    bool newLibre3Activation;
+    bool newLibre3Takeover;
+    int64_t newLibre3ReceiverID;
 
 static bool meterMatch(const struct GlucoseMeter &meter,const std::string_view deviceName,uint8_t *address)  {
     if(address) {

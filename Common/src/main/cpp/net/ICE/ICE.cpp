@@ -74,6 +74,14 @@ int hostselect(std::string_view name) {
     return hash;
     }
 int port{6789};
+// Select from this installation's private host list, using the existing CRC32 rule.
+// Dedicated ChatGPT sessions do not create or alter mirror hosts.
+std::string jgice_signal_hostname(std::string_view label) {
+    if(nrhostnames == 0) return {};
+    return std::string(hostnames[hashfunc(label.data(),static_cast<int>(label.size())) % nrhostnames]);
+}
+int jgice_signal_port() { return port; }
+
 #ifndef LOGGER
 #define LOGGER(...) fprintf(stderr,__VA_ARGS__)
 #endif
@@ -81,16 +89,18 @@ int port{6789};
 
 #define JUICE_ERR_SUCCESS 0
 
-static bool stillworking(int allindex)  {
-    auto con=getconnectionas<ICEConnect>(allindex);
-    bool res=con&&!con->finish&&con->allindex==allindex;
+static bool isStillUsable(int allindex)  {
+    const auto con=getconnectionas<ICEConnect>(allindex);
+    const bool res=con&&!con->finish&&con->allindex==allindex;
     if(!res)  {
-        LOGGERICE("stillworking(%d)=%d\n",allindex,res);
+        LOGGERICE("1: isStillUsable(%d)=%d\n",allindex,res);
+        return res;
         }
    else {
-        return getBackupHosts()[allindex].ICE;
+        const bool ice=getBackupHosts()[allindex].ICE;
+        LOGGERICE("2: isStillUsable(%d)=%d\n",allindex,ice);
+        return ice;
         }
-    return res;
     }
 const char *juiceErrorString(int error) {
     switch(error) {
@@ -309,8 +319,9 @@ extern void receiverthread(passhost_t *host,const int allindex);
 static void on_state_changed1(juice_agent_t *agent, juice_state_t state, void *user_ptr) {
    const int allindex=(int)(long)user_ptr;
     LOGGERICE("on_state_changed1 allindex=%d\n",allindex);
-    if(!stillworking(allindex))
+    if(!isStillUsable(allindex)) {
         return;
+        }
     const passhost_t &host= getBackupHosts()[allindex];
     LOGGERICE("%s %d State: %s\n", host.getICEname().data(),host.side,juice_state_to_string(state));
     auto con=getconnectionas<ICEConnect>(allindex);
@@ -712,8 +723,10 @@ static  bool putDescription(int allindex,juice_agent *agent,std::string_view com
 
 
 bool initAgent(juice_agent *agent,int allindex) {
-    if(allindex>=backup->getupdatedata()->hostnr)
+    if(allindex>=backup->getupdatedata()->hostnr)  {
+        LOGGER("initAgent allindex %d >= hostnr %d\n",allindex, backup->getupdatedata()->hostnr);
         return false;
+        }
     const passhost_t &host= getBackupHosts()[allindex];
     std::string_view commonLabel=host.getICEname();
     auto con=getconnectionas<ICEConnect>(allindex);
@@ -734,25 +747,28 @@ bool initAgent(juice_agent *agent,int allindex) {
         con->phase=GetDescription;
         if(!waitonDescription(agent,allindex,commonLabel,side,hostname)) {
            LOGGERICE("initAgent %s %d: waitonDescription failed\n",commonLabel.data(),side);
-            return false;
-        }
-      if(!stillworking(allindex))
-        return false;
+           return false;
+           }
+      if(!isStillUsable(allindex)) {
+          return false;
+          }
       }
     con->phase=PutDescription;
     if(!putDescription(allindex,agent, commonLabel, side,hostname)) { 
         LOGGERICE("initAgent %s %d: putDescription failed\n",commonLabel.data(),side);
         return false;
          }
-    if(!stillworking(allindex))
+    if(!isStillUsable(allindex)) {
         return false;
+        }
 
     std::jthread receive{getAddressesThread,agent,commonLabel,side,hostname};
     LOGGERICE("initAgent %s %d: Before juice_gather_candidates\n",commonLabel.data(),side);
     con->phase=GatherCandidates;
     int ret=juice_gather_candidates(agent);
-    if(!stillworking(allindex))
+    if(!isStillUsable(allindex)) {
         return false;
+        }
     LOGGERICE("initAgent %s %d: After juice_gather_candidates(%p)=%d\n",commonLabel.data(),side,agent,ret);
     return ret==JUICE_ERR_SUCCESS;
   }

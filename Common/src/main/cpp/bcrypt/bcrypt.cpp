@@ -27,6 +27,7 @@
 #include "../share/fromjava.h"
 
 #include "logs.hpp"
+#include "hexstr.hpp"
 //#include <tinycrypt/constants.h>
 typedef uint8_t byte;
 static   constexpr const byte packetDescriptor[][3]={
@@ -83,11 +84,12 @@ struct nonce_t {
 		nonce[0]= (byte)(mod&0xFF);
 		nonce[1]=(byte)(0xFF&(mod>>8));
 		memcpy(nonce+2, packetDescriptor[kind],3);
-        	bool res=selfencrypt(plain, inlen,key, nonce,encrypted);
+        bool res=selfencrypt(plain, inlen,key, nonce,encrypted);
 		int encryptlen=inlen+4;
 		encrypted[encryptlen]=nonce[0];
 		encrypted[encryptlen+1]=nonce[1];
 		++outCryptoSequence;
+		LOGGER("intEncrypt(%d,%s,%d,%s)=%d\n",kind,hexstr(plain,inlen).str(),inlen,hexstr(encrypted,inlen+6).str(),res);
 		return res;
 		}
  static bool selfdecrypt(byte encrypted[], int encryplen,byte key[], byte nonce[],byte plain[]) {
@@ -108,13 +110,14 @@ struct nonce_t {
 	return true;	
     }
 	bool intDecrypt(int kind, uint8_t *encrypted, int inputlen,uint8_t *decrypted) {
-		LOGGER("intDecrypt(%d,%p,%d,%p)\n",kind,encrypted,inputlen,decrypted);
 		nonce_t nonceb(iv_enc);
 		uint8_t *nonce=nonceb.data;
 		int encryptlen=inputlen-2;
 		memcpy(nonce,encrypted+encryptlen,2);
 		memcpy(nonce+2,packetDescriptor[kind],3);
-        	return selfdecrypt(encrypted,encryptlen,key,nonce,decrypted);
+        bool res=selfdecrypt(encrypted,encryptlen,key,nonce,decrypted);
+		LOGGER("intDecrypt(%d,%s,%d,%s)=%d\n",kind,hexstr(encrypted,inputlen).str(),inputlen,hexstr(decrypted,inputlen-6).str(),res);
+        return res;
 		}
 	};
 extern "C" JNIEXPORT jlong JNICALL fromjava(initcrypt)(JNIEnv *env, jclass thiz,jlong jprev,jbyteArray jkey,jbyteArray jiv) {

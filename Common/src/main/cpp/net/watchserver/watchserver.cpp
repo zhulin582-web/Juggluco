@@ -21,6 +21,9 @@
 
 #ifndef WEAROS
 #include "settings/settings.hpp"
+#if defined(__ANDROID__) && !defined(WEAROS)
+#include "jgchat/web_auth_path.hpp"
+#endif
 #include <charconv>
 #include <cmath>
 #include <inttypes.h>
@@ -2917,7 +2920,11 @@ extern uint16_t choose_language( std::string_view accept_language, const std::un
       return false;
       }
    size_t seclen=settings->data()->apisecretlength;
-   if(seclen) {
+   bool encoded_secret_path=false;
+#if defined(__ANDROID__) && !defined(WEAROS)
+   encoded_secret_path=jgchat::consume_encoded_secret(toget,{settings->data()->apisecret,seclen});
+#endif
+   if(seclen&&!encoded_secret_path) {
 
             static constexpr const char token[]="token=";
             static constexpr const int tokenlen=sizeof(token)-1;

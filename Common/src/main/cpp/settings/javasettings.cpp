@@ -22,6 +22,8 @@
 #include <vector>
 #include <string_view>
 #include <cstring>
+#include <mutex>
+#include <string>
 #include <cinttypes>
 #include <cmath>
 #include <algorithm>
@@ -808,23 +810,90 @@ extern "C" JNIEXPORT void  JNICALL   fromjava(setuseWearos)(JNIEnv *env, jclass 
     }
 
 
+static std::mutex newLibre3ReceiverMutex;
+static uint64_t newLibre3ReceiverGeneration=0;
+
+// The caller holds newLibre3ReceiverMutex. This counter is not persisted.
+static void invalidateNewLibre3ReceiverID() {
+    settings->data()->newLibre3ReceiverIDreceived=false;
+    ++newLibre3ReceiverGeneration;
+    }
+extern "C" JNIEXPORT jboolean JNICALL fromjava(getnewLibre3ReceiverIDreceived)(JNIEnv *env,jclass cl) {
+    std::lock_guard<std::mutex> lock(newLibre3ReceiverMutex);
+    return settings->data()->newLibre3ReceiverIDreceived;
+    }
+extern "C" JNIEXPORT void JNICALL fromjava(setnewLibre3ReceiverIDreceived)(JNIEnv *env,jclass cl,jboolean value) {
+    std::lock_guard<std::mutex> lock(newLibre3ReceiverMutex);
+    if(!value)
+        invalidateNewLibre3ReceiverID();
+    else
+        settings->data()->newLibre3ReceiverIDreceived=true;
+    }
+extern "C" JNIEXPORT jboolean JNICALL fromjava(getnewLibre3Activation)(JNIEnv *env,jclass cl) {
+    std::lock_guard<std::mutex> lock(newLibre3ReceiverMutex);
+    return settings->data()->newLibre3Activation;
+    }
+extern "C" JNIEXPORT void JNICALL fromjava(setnewLibre3Activation)(JNIEnv *env,jclass cl,jboolean value) {
+    std::lock_guard<std::mutex> lock(newLibre3ReceiverMutex);
+    settings->data()->newLibre3Activation=value;
+    }
+extern "C" JNIEXPORT jboolean JNICALL fromjava(getnewLibre3Takeover)(JNIEnv *env,jclass cl) {
+    std::lock_guard<std::mutex> lock(newLibre3ReceiverMutex);
+    return settings->data()->newLibre3Takeover;
+    }
+extern "C" JNIEXPORT void JNICALL fromjava(setnewLibre3Takeover)(JNIEnv *env,jclass cl,jboolean value) {
+    std::lock_guard<std::mutex> lock(newLibre3ReceiverMutex);
+    settings->data()->newLibre3Takeover=value;
+    }
+extern "C" JNIEXPORT jlong JNICALL fromjava(getnewLibre3ReceiverID)(JNIEnv *env,jclass cl) {
+    std::lock_guard<std::mutex> lock(newLibre3ReceiverMutex);
+    // A missing ID must not be mistaken for zero, which is a valid receiver ID.
+    return settings->data()->newLibre3ReceiverIDreceived ? settings->data()->newLibre3ReceiverID : -1LL;
+    }
+extern "C" JNIEXPORT void JNICALL fromjava(setnewLibre3ReceiverID)(JNIEnv *env,jclass cl,jlong value) {
+    std::lock_guard<std::mutex> lock(newLibre3ReceiverMutex);
+    settings->data()->newLibre3ReceiverID=value;
+    }
+extern "C" JNIEXPORT jlong JNICALL fromjava(getnewLibre3ReceiverGeneration)(JNIEnv *env,jclass cl) {
+    std::lock_guard<std::mutex> lock(newLibre3ReceiverMutex);
+    return static_cast<jlong>(newLibre3ReceiverGeneration);
+    }
+// Publish the number and received flag only if the account has not changed.
+extern "C" JNIEXPORT jboolean JNICALL fromjava(savenewLibre3ReceiverID)(JNIEnv *env,jclass cl,jlong value,jlong generation) {
+    std::lock_guard<std::mutex> lock(newLibre3ReceiverMutex);
+    if(value<0 || value>0xffffffffLL || static_cast<uint64_t>(generation)!=newLibre3ReceiverGeneration)
+        return false;
+    settings->data()->newLibre3ReceiverID=value;
+    settings->data()->newLibre3ReceiverIDreceived=true;
+    return true;
+    }
+
 extern "C" JNIEXPORT void  JNICALL   fromjava(setlibrebaseurl)(JNIEnv *env, jclass cl,jboolean libre3,jstring jbaseurl) {
+    std::lock_guard<std::mutex> lock(newLibre3ReceiverMutex);
     char *url=libre3?settings->data()->libre3baseurl:settings->data()->librebaseurl;
+    const std::string previous(url);
     const jint jlen = env->GetStringLength(jbaseurl);
     env->GetStringUTFRegion(jbaseurl, 0,jlen, url);
     jint len = env->GetStringUTFLength( jbaseurl);
     url[len]='\0';
+    if(libre3 && previous!=url)
+        invalidateNewLibre3ReceiverID();
      }
 extern "C" JNIEXPORT jstring  JNICALL   fromjava(getlibrebaseurl)(JNIEnv *env, jclass cl,jboolean libre3) {
+    std::lock_guard<std::mutex> lock(newLibre3ReceiverMutex);
     const char *url=libre3?settings->data()->libre3baseurl:settings->data()->librebaseurl;
      return env->NewStringUTF(url);
     }
 
 extern "C" JNIEXPORT void  JNICALL   fromjava(setlibreemail)(JNIEnv *env, jclass cl,jstring jemail) {
+    std::lock_guard<std::mutex> lock(newLibre3ReceiverMutex);
+    const std::string previous(settings->data()->libreemail);
     const jint jlen = env->GetStringLength(jemail);
     env->GetStringUTFRegion(jemail, 0,jlen, settings->data()->libreemail);
     jint len = env->GetStringUTFLength( jemail);
     settings->data()->libreemail[len]='\0';
+    if(previous!=settings->data()->libreemail)
+        invalidateNewLibre3ReceiverID();
     settings->data()->libreinit=false;
     settings->data()->libreinit3=false;
     if(jlen<3)
@@ -832,6 +901,7 @@ extern "C" JNIEXPORT void  JNICALL   fromjava(setlibreemail)(JNIEnv *env, jclass
 
      }
 extern "C" JNIEXPORT jstring  JNICALL   fromjava(getlibreemail)(JNIEnv *env, jclass cl) {
+    std::lock_guard<std::mutex> lock(newLibre3ReceiverMutex);
      return env->NewStringUTF(settings->data()->libreemail);
     }
 #include "mixpass.hpp"
@@ -949,13 +1019,18 @@ extern "C" JNIEXPORT jstring  JNICALL   fromjava(getlibreDeviceID)(JNIEnv *env, 
      return env->NewStringUTF(getDeviceID(libre3).data());
     }
 extern "C" JNIEXPORT void  JNICALL   fromjava(setlibreAccountID)(JNIEnv *env, jclass cl,jstring jAccountID) {
+    std::lock_guard<std::mutex> lock(newLibre3ReceiverMutex);
+    const auto previous=settings->data()->libreviewAccountID;
     const jint jlen = env->GetStringLength(jAccountID);
      auto &accountid=settings->data()->libreviewAccountID;
      accountid={};
     env->GetStringUTFRegion(jAccountID, 0,jlen, accountid.data());
     settings->data()->_nullchar1='\0';
+    if(previous!=accountid)
+        invalidateNewLibre3ReceiverID();
      }
 extern "C" JNIEXPORT jstring  JNICALL   fromjava(getlibreAccountID)(JNIEnv *env, jclass cl) {
+    std::lock_guard<std::mutex> lock(newLibre3ReceiverMutex);
      return env->NewStringUTF(settings->data()->libreviewAccountID.data());
     }
 
@@ -1915,6 +1990,7 @@ std::string_view getjstring(JNIEnv *env,jstring jstr)  {
     strbuf[strlen]='\0';
     return {strbuf,strlen};
     }
+
 extern "C" JNIEXPORT void JNICALL fromjava(setDevice) (JNIEnv *env, jclass clazz, jstring jMANUFACTURER, jstring jMODEL, int SDK_INTin) { 
    if(settings->data()->initVersion<36) { 
     if(jMODEL) {
@@ -1929,8 +2005,14 @@ extern "C" JNIEXPORT void JNICALL fromjava(setDevice) (JNIEnv *env, jclass clazz
                         constexpr const char watch4[]{"R8"};
                         if(memcmp(watch4,strbuf+3,2)) { 
                                 LOGGER("MODEL %s Samsung not Watch4\n",strbuf);
-                                settings->data()->DisconnectSensor=true;
-                                return;
+                                constexpr const char watch9[]{"L3"};
+                                if(memcmp(watch9,strbuf+3,2)) { 
+                                        LOGGER("MODEL %s Samsung not Watch9\n",strbuf);
+                                        settings->data()->DisconnectSensor=true;
+                                        return;
+                                        }
+                                else
+                                    LOGGER("MODEL %s Samsung Watch9\n",strbuf);
                                 }
                         else {
                                 LOGGER("MODEL %s Samsung Watch4\n",strbuf);
@@ -1942,7 +2024,6 @@ extern "C" JNIEXPORT void JNICALL fromjava(setDevice) (JNIEnv *env, jclass clazz
                }
         }
       }
-
 
 extern "C" JNIEXPORT void  JNICALL   fromjava(setdontuseclose)(JNIEnv *env, jclass cl,jboolean val) {
     settings->data()->dontuseclose=val;

@@ -440,10 +440,10 @@ static void menuitem(MainActivity act, NumberView numb, int mealptr, int pos, In
     TextView totallabel=getlabel(act,R.string.total);
     editfocus focushere=new editfocus();
     EditText total=smallScreen?geteditwearos(act):geteditview(act,focushere);
-    total.setMinEms(5);
+    total.setEms(5);
     TextView mealtotallabel=getlabel(act,R.string.mealtotal);
     EditText mealtotal=smallScreen?geteditwearos(act):geteditview(act,focushere);
-    mealtotal.setMinEms(5);
+    mealtotal.setEms(5);
     TextView amountlabel=getlabel(act,R.string.quantity);
     EditText amount    = smallScreen?geteditwearos(act):geteditview(act,focushere);
 
@@ -451,7 +451,7 @@ static void menuitem(MainActivity act, NumberView numb, int mealptr, int pos, In
     amount.requestFocus();
 
     editfocus.setedittext(amount);
-    amount.setMinEms(5);
+    amount.setEms(5);
     float[] cargs={0.0f};
     int [] ingred={-1};
     if(pos>=0) {
@@ -521,40 +521,42 @@ static void menuitem(MainActivity act, NumberView numb, int mealptr, int pos, In
            public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
            public void onTextChanged(CharSequence s, int start, int before, int count) { }
           });
-boolean[] done={false};
+    boolean[] placed={false};
+    boolean[] placedLandscape={false};
     Layout lay=new Layout(act,(l,w,h)-> {
-        int width=GlucoseCurve.getwidth(act);
-        int hei=GlucoseCurve.getheight(act);
-        Log.i(LOG_ID,"addcomponent width="+width+" height="+hei+" w="+w+" h="+h);
-        if(!smallScreen&&GlucoseCurve.isLandscape(act)) {
-            int leftHalf=MainActivity.systembarLeft+safeWidth(width)/2;
-            int xpos=leftHalf-w;
-            l.setX(Math.max(MainActivity.systembarLeft,xpos));
-            int maximumY=hei-MainActivity.systembarBottom-h;
-            int centered=MainActivity.systembarTop+(safeHeight(hei)-h)/2;
-            l.setY(clamp(centered,MainActivity.systembarTop,maximumY));
+        final boolean landscape=!smallScreen&&GlucoseCurve.isLandscape(act);
+        if(!placed[0]||placedLandscape[0]!=landscape) {
+            int width=GlucoseCurve.getwidth(act);
+            int hei=GlucoseCurve.getheight(act);
+            Log.i(LOG_ID,"addcomponent width="+width+" height="+hei+" w="+w+" h="+h);
+            if(landscape) {
+                int leftHalf=MainActivity.systembarLeft+safeWidth(width)/2;
+                int xpos=leftHalf-w;
+                l.setX(Math.max(MainActivity.systembarLeft,xpos));
+                int maximumY=hei-MainActivity.systembarBottom-h;
+                int centered=MainActivity.systembarTop+(safeHeight(hei)-h)/2;
+                l.setY(clamp(centered,MainActivity.systembarTop,maximumY));
+                }
+            else {
+                l.setX(centeredSafeX(width,w));
+                l.setY(MainActivity.systembarTop);
+                }
+            placedLandscape[0]=landscape;
+            placed[0]=true;
             }
-        else {
-            l.setX(centeredSafeX(width,w));
-            l.setY(MainActivity.systembarTop);
-            }
-        if(!done[0]) {
-              numshowkeyboard(numb,act,l);
-              done[0]=true;
-              }
         return new int[]{w,h};
         },new View[]{amountlabel,amount},new View[]{ingrlabel,Ingredient},new View[]{carblabel,carbos},new View[]{totallabel,total}, new View[]{mealtotallabel,mealtotal},
             new View[] {Delete,Cancel,Save});
        int pad=(int)(tk.glucodata.GlucoseCurve.metrics.density*5.0);
        lay.setPadding(pad,0,pad,0);
     act.addMyContentView(lay, new ViewGroup.LayoutParams(WRAP_CONTENT, WRAP_CONTENT));
-    registerOrientationLayout(act,lay,view->requestMenuItemLayout(view,numb));
-    /*
-      lay.post(() -> {
-          lay.requestLayout();
-          numshowkeyboard(numb,act,lay);
-          });
-*/
+    registerOrientationLayout(act,lay,view->{
+        final boolean landscape=!smallScreen&&GlucoseCurve.isLandscape(act);
+        if(placedLandscape[0]!=landscape)
+            placed[0]=false;
+        requestMenuItemLayout(view,numb);
+        });
+    lay.post(()->numshowkeyboard(numb,act,lay));
         lay.setBackgroundColor(Applic.backgroundcolor);
 
     Delete.setOnClickListener(v-> {

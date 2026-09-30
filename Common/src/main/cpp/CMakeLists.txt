@@ -63,7 +63,7 @@ set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
 set(BCRYPTDIR ${INCLUDESELF}/bcrypt/)
 set(BCRYPTFILES ${BCRYPTDIR}aes_encrypt.c ${BCRYPTDIR}bcrypt.cpp ${BCRYPTDIR}ccm_mode.c ${BCRYPTDIR}utils.c)
 
-set(EXTRAVIEW ${NETDIR}/libreview/putsensor.cpp ${NETDIR}/libreview/mkrealhistory.cpp ${NETDIR}/libreview/libreview.cpp ${NETDIR}/libreview/newlibre3.cpp ${NETDIR}/libreview/libreview.cpp )
+set(EXTRAVIEW ${NETDIR}/libreview/putsensor.cpp ${NETDIR}/libreview/mkrealhistory.cpp ${NETDIR}/libreview/libreview.cpp ${NETDIR}/libreview/newlibre3.cpp ${NETDIR}/libreview/libreview.cpp ${NETDIR}/libreview/libre_receiver_jni.c  )
 
 #set(LIBRE3FILES ${INCLUDESELF}/libre3/loadlibs.cpp ${INCLUDESELF}/libre3/bluetooth.cpp ${INCLUDESELF}/libre3/nfc.cpp ${INCLUDESELF}/libre3/libre3_old_policy_bypass.c ) # ${INCLUDESELF}/libre3/libre3_postgen_dump.cpp )
 if(libre3)
@@ -371,6 +371,12 @@ set(NO_SERVER ON CACHE BOOL "Disable server support" FORCE)
 set(NO_TESTS  ON CACHE BOOL "Disable tests build" FORCE)
 
 add_subdirectory(libjuice)
+
+include("${CMAKE_CURRENT_SOURCE_DIR}/jgchat/android/integration.cmake")
+
+if(ANDROID AND NOT WEAROS)
+    include("${CMAKE_CURRENT_SOURCE_DIR}/jgice/android/integration.cmake")
+endif()
 
 
 target_link_libraries( g PRIVATE  c++_static c   ${log-lib} ${OPENGL_LIB} android EGL m atomic z dl  $<BUILD_INTERFACE:juice>)

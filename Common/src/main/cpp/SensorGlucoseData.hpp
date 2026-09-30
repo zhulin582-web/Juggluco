@@ -1537,7 +1537,7 @@ if(const ScanData *last=lastpoll()) {
     if(last->g) {
         lastlifecount=last->id;;
         timelastcurrent=last->t;
-        LOGGER("lastlifecount=%d %s",lastlifecount,ctime(&timelastcurrent));
+        LOGGER("waslast: lastlifecount=%d %s",lastlifecount,ctime(&timelastcurrent));
         }
     int start=getStreamStart();
     if((start+1)<pollcount()) {
@@ -1551,6 +1551,13 @@ if(const ScanData *last=lastpoll()) {
             }
         }
     }
+  else {
+        if(isLibre3()) {
+                lastlifecount=0;
+                timelastcurrent=getstarttime()+60;
+                LOGGER("no data: lastlifecount=%d %s",lastlifecount,ctime(&timelastcurrent));
+                }
+        }
    if(!(isAccuChek()||isSibionics()||isDexcom()||isAir()||isAidexX())) {
       LOGGER("getinfo()->lastHistoricLifeCountReceivedPos=%d\n", getinfo()->lastHistoricLifeCountReceivedPos);
       if(!getinfo()->lastHistoricLifeCountReceivedPos) getinfo()->lastHistoricLifeCountReceivedPos=12;

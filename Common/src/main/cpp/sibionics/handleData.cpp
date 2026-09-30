@@ -33,6 +33,7 @@
 #include "datbackup.hpp"
 #include "inout.hpp"
 #include "EverSense.hpp"
+#include "deviceaddress.hpp"
 #include <jni.h>
 
 #ifndef NOLOG
@@ -83,22 +84,37 @@ extern "C" JNIEXPORT jbyteArray JNICALL   fromjava(getSItimecmd)(JNIEnv *env, jc
 extern int64_t v120_apply_authentication(int sisubtype, const uint8_t* deviceName, uint8_t* dest_buf, uint16_t dest_size);
 
 std::array<jbyte,6>  deviceArray(const char address[]);
+extern bool gs3Auth(si3stream &stream,std::vector<uint8_t> &command);
 extern "C" JNIEXPORT jbyteArray JNICALL   fromjava(siAuthBytes)(JNIEnv *env, jclass cl,jlong dataptr) {
    if(!dataptr) {
        LOGAR("siAuthBytes dataptr==null");
        return nullptr;
        }
-   const SensorGlucoseData *usedhist=reinterpret_cast<streamdata *>(dataptr)->hist ; 
+   auto *stream=reinterpret_cast<streamdata *>(dataptr);
+   const SensorGlucoseData *usedhist=stream->hist;
    if(!usedhist) {
        LOGAR("siAuthBytes usedhist==null");
        return nullptr;
        }
+   if(stream->libreversion==0x15) {
+       std::vector<uint8_t> command;
+       if(!gs3Auth(*static_cast<si3stream *>(stream),command)||command.empty()) return nullptr;
+       jbyteArray out=env->NewByteArray(command.size());
+       env->SetByteArrayRegion(out,0,command.size(),reinterpret_cast<const jbyte *>(command.data()));
+       return out;
+   }
    const auto address=usedhist->deviceaddress();
+   std::array<uint8_t,6> checked;
+   if(!address||!sibionicsAddress(address,checked)) {
+       LOGAR("siAuthBytes invalid device address");
+       return nullptr;
+   }
    auto rev=deviceArray(address);
    constexpr const int maxcmd=26;
    uint8_t cmd[maxcmd];
    const int siType= usedhist->siSubtype();
    int len=v120_apply_authentication(siType, (const uint8_t *)rev.data(), cmd, maxcmd);
+   if(len<=0||len>maxcmd) return nullptr;
 #ifndef NOLOG
    constexpr const int maxbuf=80;
    char buf[maxbuf];
@@ -139,4 +155,3 @@ jlong SiContext::processData2(SensorGlucoseData *sens,time_t nowsecs,data_t *dat
   }
 #endif
 #endif
-

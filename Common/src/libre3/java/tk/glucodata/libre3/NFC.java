@@ -18,7 +18,6 @@
 /*                                                                                   */
 /*      Fri Jan 27 15:27:34 CET 2023                                                 */
 
-
 package tk.glucodata.libre3;
 
 import static tk.glucodata.Log.doLog;
@@ -35,13 +34,31 @@ import tk.glucodata.Natives;
 
 public class NFC {
 
-
 private static final String LOG_ID="NFC";
 public static	long   	second(byte[] nfc1,Tag tag,tk.glucodata.GlucoseCurve curve) {
 	long nowsec=(long)Math.round(System.currentTimeMillis()/1000.0);
-//	long nowsec=Natives.getLibre3secs(nfc1);
-//	if(nowsec==0L) return 0L;
-	long accountId=getlibreAccountIDnumber();
+    final long manual=Natives.manualLibreAccountIDnumber();
+    if(manual!=-1L)  
+        return secondWithID(nfc1,tag,curve,nowsec,manual);
+	final boolean activate=nfc1[17]==1;
+	final boolean newFirst=activate?Natives.getnewLibre3Activation():Natives.getnewLibre3Takeover();
+	final long oldID=getlibreAccountIDnumber();
+	final long newID=Natives.getnewLibre3ReceiverID();
+	final boolean haveNew=newID>=0L && newID<=0xffffffffL;
+	if(activate && newFirst && !haveNew) {
+		Log.e(LOG_ID,"New Libre 3 receiver ID has not been retrieved");
+		return 1L;
+		}
+	final long firstID=newFirst && haveNew?newID:oldID;
+	long result=secondWithID(nfc1,tag,curve,nowsec,firstID);
+	// interpret3NFC2 returns 1 for the B1 account-ID rejection, not a stream pointer.
+	if(!activate && result==1L && haveNew && newID!=oldID) {
+		long otherID=firstID==newID?oldID:newID;
+		result=secondWithID(nfc1,tag,curve,nowsec,otherID);
+		}
+	return result;
+	}
+private static long secondWithID(byte[] nfc1,Tag tag,tk.glucodata.GlucoseCurve curve,long nowsec,long accountId) {
 	{if(doLog) {Log.i(LOG_ID,"accountId="+accountId);};};
 	byte[] metcrc=new byte[10];// 8C 42 86 62 8D 6D 41 1F BC 93
 	if(Natives.startTimeIDsum(metcrc, nowsec, accountId) != 0) {
@@ -57,11 +74,9 @@ public static	long   	second(byte[] nfc1,Tag tag,tk.glucodata.GlucoseCurve curve
         System.arraycopy(metcrc, 0, command, secstart.length, metcrc.length);
 	{if(doLog){showbytes("NFC command2: ",command);};}
         var second= AlgNfcV.wholenfccmd(tag,command);
-        tk.glucodata.Libre3Emulator.captureScan(nfc1,second);
         long[] uit={0L};
 	curve.render.sensorid=interpret3NFC2(nfc1,second,nowsec,uit);
         return uit[0];
 	}
-
 
 }
