@@ -127,7 +127,7 @@ android {
         //compileSdk 36
         applicationId "tk.glucodata"
 
-         versionName '11.2.0'
+         versionName '11.3.0'
 //    multiDexEnabled true
 
         buildConfigField 'int', 'isRelease', '0'
@@ -203,7 +203,7 @@ flavorDimensions = ['wearos','libreVersion','SiBionics', 'DexCom','Google']
     //******  Zet op rollout op 100% ******
             dimension 'libreVersion'
             versionCode 913 //LIBRE2ONLY
-         //    versionName '11.2.0-no3'
+         //    versionName '11.3.0-no3'
             versionNameSuffix '-no3'
             buildConfigField 'int', 'libreVersion', '2'
             externalNativeBuild.cmake {
@@ -260,7 +260,7 @@ flavorDimensions = ['wearos','libreVersion','SiBionics', 'DexCom','Google']
         manifestPlaceholders["minSDK"] = '26'
         versionCode 914 //WATCH
     //******  Zet op rollout op 100% ******
-        //versionName '11.2.0-wear'
+        //versionName '11.3.0-wear'
         versionNameSuffix '-wear'
         signingConfig signingConfigs.alg
 
@@ -279,7 +279,7 @@ flavorDimensions = ['wearos','libreVersion','SiBionics', 'DexCom','Google']
 //        minSdk 19
             dimension 'wearos'
         versionCode 914 //WATCH
-        //versionName '11.2.0-small'
+        //versionName '11.3.0-small'
         versionNameSuffix '-small'
         signingConfig signingConfigs.alg
 

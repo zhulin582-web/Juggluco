@@ -1973,7 +1973,7 @@ ist. Sie können es auch manuell an Libreview senden, indem Sie auf
 <p>Neben Glukosewerten können auch Mengen an Libreview gesendet
 werden. Dazu müssen Sie auf „<strong><i>Mengen senden</i></strong>“
 tippen und angeben, was die einzelnen Etiketten bedeuten.</p>
-<p style="line-height: 100%; margin-bottom: 0in"><b>RU</b>: Sie
+<p style="line-height: 100%; margin-bottom: 0cm"><b>RU</b>: Sie
 müssen dies festlegen, wenn Sie <a href="https://libreview.ru/">https://libreview.<b>ru</b></a>
 anstelle von <a href="https://libreview.com/">https://libreview.com</a>
 verwenden. Dies gilt nur für Libre 2-Sensoren. Libre 3-Sensoren
@@ -1996,7 +1996,7 @@ Wenn diese Option deaktiviert ist, meldet Juggluco immer, dass es
 nicht angezeigt wird. Diese Option sendet diese Informationen nur
 dann zuverlässig an Libreview, wenn auch „<i>Sofort“</i>
 aktiviert ist.</p>
-<p><b>Anfang</b><b> ändern</b>: Daten ab einem bestimmten Datum und
+<p><b>Anfang</b> <b>ändern</b>: Daten ab einem bestimmten Datum und
 einer bestimmten Uhrzeit erneut senden. Sie müssen diese Taste
 drücken, wenn Sie zu einem neuen Libreview-Konto wechseln.</p>
 <p>Das Ergebnis des letzten Sendeversuchs an Libreview wird unter der
@@ -2037,10 +2037,23 @@ aktualisiert). Das Abrufen der Konto-ID vom LibreView-Server
 ermöglicht die Verwendung eines FreeStyle Libre 3-Sensors, der
 bereits mit der Abbotts Libre 3-App verwendet wurde, mit diesem
 LibreView-Konto.</p>
-<p>Die Libreview-Konto-ID-Nummer kann auch aus der in der Adressleiste von Libreview-Berichten angezeigten UUID <a href="https://www.juggluco.nl/Juggluco/libre3/convertUUID.html">konvertiert</a> und manuell in Juggluco eingegeben werden.</p>
-<p>Daten von Sibionics- und Dexcom-Sensoren werden nicht an Libreview gesendet.</p>
-<p>Wenn Sie Daten im Libreview-Format speichern
-möchten, können Sie dies auch im linken mittleren Menü → <a href="https://www.juggluco.nl/Jugglucohelp/de/helpexport.html">Export</a> oder im <a  href="https://www.juggluco.nl/Juggluco/webserver.html#libreview">Webserver</a> in Juggluco tun. Glukosewerte von Dexcom- und Sibionics-Sensoren sind
+<p>Die Libreview-Konto-ID-Nummer kann auch aus der in der
+Adressleiste von Libreview-Berichten angezeigten UUID <a href="https://www.juggluco.nl/Juggluco/libre3/convertUUID.html">konvertiert</a>
+und manuell in Juggluco eingegeben werden.</p>
+<p><b>Neue Libre-App</b>: Übermittelt dieselbe Nummer wie die neue
+Libre-App, um einen Libre-3-Sensor zu aktivieren. Diese Nummer wird
+rechts neben dieser Einstellung angezeigt, sofern sie bekannt ist;
+andernfalls erscheint -1. Abbotts neue Libre-App
+(<a href="https://play.google.com/store/apps/details?id=com.abbott.adc.freestyle.libre.de">https://play.google.com/store/apps/details?id=com.abbott.adc.freestyle.libre.de</a>)
+verwendet bei der Sensoraktivierung eine andere Nummer als die
+Libre-3-App von Abbott. Zuvor konnte Juggluco keine mit dieser App
+aktivierten Sensoren übernehmen, doch nun sollte dies möglich sein.</p>
+<p>Daten von Sibionics- und Dexcom-Sensoren werden nicht an Libreview
+gesendet.</p>
+<p>Wenn Sie Daten im Libreview-Format speichern möchten, können Sie
+dies auch im linken mittleren Menü → <a href="https://www.juggluco.nl/Jugglucohelp/de/helpexport.html">Export</a>
+oder im <a href="https://www.juggluco.nl/Juggluco/webserver.html#libreview">Webserver</a>
+in Juggluco tun. Glukosewerte von Dexcom- und Sibionics-Sensoren sind
 ebenfalls enthalten.</p>
 <p><br/>
 <br/>
@@ -2050,7 +2063,6 @@ ebenfalls enthalten.</p>
 <br/>
 
 </p>
-
 ]]>
 </string>
 <string name="locationpermission" >
@@ -4144,6 +4156,65 @@ Blutzuckerwert, der um 7:30 Uhr ausgelöst wurde und einem
 festgelegten Intervall von 20 Minuten, und wenn der Blutzuckerwert
 weiterhin niedrig ist, wird der Alarm erst nach 7:50 Uhr erneut
 ausgelöst.</p>
+<p><br/>
+<br/>
+
+</p>
+]]>
+</string>
+<string name="chatgpthelp" >
+<![CDATA[
+<p><a href="https://www.juggluco.nl/Jugglucohelp/de/index.html">index</a></p><p><a href="https://www.juggluco.nl/Jugglucohelp/de/chatgpthelp.html">de</a>&emsp;&emsp;<a href="https://www.juggluco.nl/Jugglucohelp/nl/chatgpthelp.html">nl</a>&emsp;&emsp;<a href="https://www.juggluco.nl/Jugglucohelp/chatgpthelp.html?lang=en">en</a>&emsp;&emsp;</p><h1 class="western">ChatGPT</h1>
+<p style="line-height: 100%; margin-bottom: 0cm">Juggluco 11.3.0 und
+höher nutzen die Codex-Schnittstelle, um die Kommunikation mit
+ChatGPT zu ermöglichen. Aktivieren Sie dazu zunächst in den
+ChatGPT-Einstellungen unter „<i>Sicherheit und Anmeldung“ die
+Option „Gerätecode-Anmeldung für Codex, Excel, PowerPoint und
+Word aktivieren</i>“. Anschließend können Sie Juggluco die
+Anmeldung über die standardmäßige Codex OpenAI-Anmeldung erlauben.</p>
+<p style="line-height: 100%; margin-bottom: 0cm">ChatGPT erhält
+Lesezugriff auf die Daten von Juggluco. Sie können Fragen stellen,
+und ChatGPT kann Antworten auf folgende Weise generieren:</p>
+<ul>
+	<li><p style="line-height: 100%; margin-bottom: 0cm">Eine
+	Textantwort;</p></li>
+	<li><p style="line-height: 100%; margin-bottom: 0cm">Eine Kurve, die
+	bestimmte Daten darstellt;</p></li>
+	<li><p style="line-height: 100%; margin-bottom: 0cm">Daten können
+	in einer Datei gespeichert werden;</p></li>
+	<li><p style="margin-bottom: 0cm; line-height: 100%">In Juggluco
+	wurden Seiten zum Webserver hinzugefügt, sodass ChatGPT Ergänzungen
+	zum Webserver vornehmen kann, wenn Sie eine nicht standardmäßige
+	Anfrage für die Anzeige von Daten haben.</p></li>
+</ul>
+<p style="line-height: 100%; margin-bottom: 0cm"><br/>
+
+</p>
+<p style="line-height: 100%; margin-bottom: 0cm">ChatGPT kann
+folgende Daten abrufen:</p>
+<ul>
+	<li><p style="line-height: 100%; margin-bottom: 0cm">Sensoren und
+	Sensortypen;</p></li>
+	<li><p style="line-height: 100%; margin-bottom: 0cm">Sensordaten:
+	Datenstrom, Verlauf und Scans;</p></li>
+	<li><p style="line-height: 100%; margin-bottom: 0cm">Eingegebene
+	Zahlen (Mengen);</p></li>
+	<li><p style="line-height: 100%; margin-bottom: 0cm">Mahlzeiten;</p></li>
+	<li><p style="line-height: 100%; margin-bottom: 0cm">Benutzerdefinierte
+	Zutaten;</p></li>
+	<li><p style="line-height: 100%; margin-bottom: 0cm">Die
+	Lebensmitteldatenbank in Juggluco;</p></li>
+	<li><p style="line-height: 100%; margin-bottom: 0cm">Kennt viele
+	Einstellungen in der App: Alarme, Erinnerungen, Spiegel,
+	Blutzuckermessgerät-Einstellungen usw.</p></li>
+</ul>
+<p style="line-height: 100%; margin-bottom: 0cm"><br/>
+
+</p>
+<p style="line-height: 100%; margin-bottom: 0cm">ChatGPT kann
+verwendet werden, um die Daten in Juggluco anders darzustellen und
+Berechnungen durchzuführen. Sie können auch Hilfe zu Juggluco
+anfordern.</p>
 <p><br/>
 <br/>
 

@@ -31,7 +31,16 @@
 #include "destruct.hpp"
 #include "datbackup.hpp"
 #include "hexstr.hpp"
+#include "lingo_realtime.h"
 extern Sensoren *sensors;
+
+extern "C" JNIEXPORT jint JNICALL fromjava(getLingoSecurityVersion)(JNIEnv *, jclass, jlong sensorptr) {
+    const auto *sens=reinterpret_cast<const SensorGlucoseData *>(sensorptr);
+    if(!sens || !sens->isLingo()) return 0;
+    const auto version=sens->getinfo()->lingoSecurityVersion;
+    // Old fork records without an NFC version need a rescan, never Libre 3 keys.
+    return version?version:-1;
+    }
 
 extern void    sendKAuth(SensorGlucoseData *hist);
 extern "C" JNIEXPORT  void JNICALL fromjava(setLibre3kAuth)(JNIEnv *env, jclass thiz, jlong sensorptr,jbyteArray kauthin) {
@@ -243,11 +252,8 @@ static jlong save3current(SensorGlucoseData *sens, const oneminute *minptr,uint3
 #endif
     if(validglucosevalue(curval)) {
         sens->sensorerror=false;
-        int16_t rateofchange=minptr->rateOfChange;
-        if(rateofchange==-32768) {
-            rateofchange=trend2rate(minptr->trend);
-            }
-        const float rate= rateofchange/100.0f;
+        const int16_t rateofchange=minptr->rateOfChange;
+        const float rate=rateofchange==-32768 ? trend2rate(minptr->trend) : rateofchange/100.0f;
         sens->savepollallIDs<60>(now,minptr->lifeCount,curval,minptr->trend,rate);
         res=glucoseback(now,curval,rate,sens);
         sens->consecutivelifecount();
@@ -342,6 +348,32 @@ extern "C" JNIEXPORT  jlong JNICALL fromjava(saveLibre3MinuteL)(JNIEnv *env, jcl
 
 
 
+
+// Lingo's 51-byte plaintext carries two analytes, including measured rate/trend.
+extern "C" JNIEXPORT jlong JNICALL fromjava(saveLingoMinuteL)(JNIEnv *env, jclass, jlong sensorptr,jbyteArray jmindata,jlong msec) {
+    auto *sens=reinterpret_cast<SensorGlucoseData *>(sensorptr);
+    if(!sens || !jmindata || env->GetArrayLength(jmindata)!=LINGO_REALTIME_LEN)
+        return 0LL;
+    uint8_t plain[LINGO_REALTIME_LEN];
+    env->GetByteArrayRegion(jmindata,0,sizeof(plain),reinterpret_cast<jbyte *>(plain));
+    lingo_realtime_t r;
+    if(lingo_parse_realtime(plain,sizeof(plain),&r)!=0) return 0LL;
+    oneminute om{};
+    om.lifeCount=r.life_count;
+    om.readingMgDl=r.glucose_valid?r.glucose_mgdl:0;
+    om.rateOfChange=r.rate_of_change;
+    om.trend=r.trend;
+    om.historicalLifeCount=r.historic_life_count;
+    om.historicalReading=r.historic_valid?r.historic_mgdl:0;
+    om.uncappedCurrentMgDl=r.uncapped_glucose_valid?r.uncapped_glucose_mgdl:0;
+    om.uncappedHistoricMgDl=r.uncapped_historic_valid?r.uncapped_historic_mgdl:0;
+    om.temperature=r.temperature_valid?static_cast<uint16_t>(r.temperature_centi):0x8000;
+    const jlong result=save3current(sens,&om,msec/1000L);
+    save3history(sens,&om);
+    backup->wakebackup(wakestream);
+    wakewithcurrent();
+    return result;
+    }
 
 struct fastData {
     uint16_t lifeCount;
@@ -492,6 +524,73 @@ extern "C" JNIEXPORT  jboolean JNICALL fromjava(saveLibre3History)(JNIEnv *env, 
     return  saveLibre3History(sens, history,len);
     }
 
+static uint16_t lingo_rd_u16(const uint8_t *p) {
+    return static_cast<uint16_t>(p[0]|(static_cast<uint16_t>(p[1])<<8));
+    }
+static bool lingo_reading(uint16_t packed,uint16_t &value) {
+    if(packed&0x8000u) return false; // Sensor data-quality flag.
+    value=packed&0x0FFFu;
+    return validglucosevalue(value);
+    }
+
+// Channel 1 is glucose on the supported Lingo v3 sensors. Reject channel 0
+// (the other analyte) instead of mistaking its numeric value for glucose.
+extern "C" JNIEXPORT jboolean JNICALL fromjava(saveLingoHistory)(JNIEnv *env, jclass, jlong sensorptr,jbyteArray jhistory) {
+    auto *sens=reinterpret_cast<SensorGlucoseData *>(sensorptr);
+    if(!sens || !jhistory) return false;
+    const jsize len=env->GetArrayLength(jhistory);
+    if(len<4 || len>14 || (len&1)) return false;
+    uint8_t history[14];
+    env->GetByteArrayRegion(jhistory,0,len,reinterpret_cast<jbyte *>(history));
+    const uint16_t start=lingo_rd_u16(history);
+    if(!(start&0x8000u)) return false;
+    int lifecount=start&0x7FFFu;
+    const int interval=sens->getmininterval();
+    int idpos=static_cast<int>(round(lifecount/static_cast<double>(interval)));
+    sens->backhistory(idpos);
+    int lastsave=-1;
+    for(int offset=2;offset<len;offset+=2,idpos++,lifecount+=interval) {
+        const uint16_t raw=lingo_rd_u16(history+offset);
+        if(raw==0) break;
+        uint16_t value;
+        if(lingo_reading(raw,value)) {
+            sens->savenewhistory(idpos,lifecount,static_cast<uint16_t>(10*value));
+            lastsave=idpos;
+            }
+        }
+    if(lastsave>=0) {
+        sens->updateHistorylifecount(lastsave);
+        if(lastsave+1>sens->getScanendhistory()) sens->setendhistory(lastsave+1);
+        }
+    return true;
+    }
+
+extern "C" JNIEXPORT jboolean JNICALL fromjava(saveLingoFastData)(JNIEnv *env, jclass, jlong sensorptr,jbyteArray jfast) {
+    auto *sens=reinterpret_cast<SensorGlucoseData *>(sensorptr);
+    if(!sens || !jfast || env->GetArrayLength(jfast)!=14) return false;
+    uint8_t fast[14];
+    env->GetByteArrayRegion(jfast,0,sizeof(fast),reinterpret_cast<jbyte *>(fast));
+    const uint16_t encodedLife=lingo_rd_u16(fast);
+    if(!(encodedLife&0x8000u)) return false;
+    const int lifecount=encodedLife&0x7FFFu;
+    uint16_t curval=0,histval=0;
+    const bool curok=lingo_reading(lingo_rd_u16(fast+10),curval);
+    const bool histok=lingo_reading(lingo_rd_u16(fast+12),histval);
+    const int histcount=lifecount<22?0:((lifecount-17)/5)*5;
+    if(histok && saveLibre3Historyel(sens,histcount,histval))
+        sens->consecutivehistorylifecount();
+    if(curok) {
+        const auto wastime=sens->lifeCount2time(lifecount);
+        if(wastime>=1666476000 && !sens->hasStreamID(lifecount,wastime)) {
+            sens->savepollallIDs<60>(wastime,lifecount,curval,0,NAN);
+            sens->backstream(lifecount);
+            if(lifecount>=(sens->pollcount()-2)) backup->wakebackup(wakestream);
+            }
+        }
+    sens->fastupdatelifecount(lifecount);
+    return true;
+    }
+
 struct Patchstatus  {
     int16_t lifeCount;    
     int16_t errorData;//?
@@ -517,7 +616,10 @@ extern "C" JNIEXPORT  jint JNICALL  fromjava(libre3processpatchstatus)(JNIEnv *e
         return -1;
         }    
     const jint len = env->GetArrayLength(jstatus);
-    if(len!=sizeof(Patchstatus)) {
+    SensorGlucoseData *sens=reinterpret_cast<SensorGlucoseData *>(sensorptr);
+    if(!sens) return -1;
+    // Lingo has two additional analyte bytes after the common status fields.
+    if(len!=sizeof(Patchstatus) && !(sens->isLingo() && len==sizeof(Patchstatus)+2)) {
         LOGGER("libre3processpatchstatus length(jstatus)==%d!=%d\n",len,(int)sizeof(Patchstatus));
         return -1;
         }
@@ -530,7 +632,6 @@ extern "C" JNIEXPORT  jint JNICALL  fromjava(libre3processpatchstatus)(JNIEnv *e
     LOGAR("libre3processpatchstatus");
     const Patchstatus *pstatus=reinterpret_cast<const Patchstatus *>(status);
     LOGGER("patchState=%d, totalEvents=%d, lifeCount=%d, errorData=%d, eventData=%d, index=%d, currentLifeCount=%d, stackDisconnectReason=%d, appDisconnectReason=%d\n", pstatus->patchState, pstatus->totalEvents(), pstatus->lifeCount, pstatus->errorData, pstatus->getEventData(), pstatus->index, pstatus->currentLifeCount, pstatus->stackDisconnectReason, pstatus->appDisconnectReason);
-    SensorGlucoseData *sens=reinterpret_cast<SensorGlucoseData *>(sensorptr);
     sens->getinfo()->patchState=pstatus->patchState;
 //s/\<\([a-zA-Z]*\)=%d/pstatus->\1/g
     return pstatus->currentLifeCount|pstatus->index<<16;
@@ -604,6 +705,15 @@ extern "C" JNIEXPORT  jbyteArray JNICALL  fromjava(libre3ClinicalControl)(JNIEnv
     LOGGER("libre3ClinicalControl(%d,%d)\n",arg,from);
     const ClinicalControl com(arg,from);    
     return comtojbyteArray(env,com);
+    }
+
+extern "C" JNIEXPORT jbyteArray JNICALL fromjava(lingoControlHistory)(JNIEnv *env, jclass, jint arg,jint from) {
+    const RequestData command{{1,2},static_cast<int8_t>(arg),from};
+    return comtojbyteArray(env,command);
+    }
+extern "C" JNIEXPORT jbyteArray JNICALL fromjava(lingoClinicalControl)(JNIEnv *env, jclass, jint arg,jint from) {
+    const RequestData command{{1,3},static_cast<int8_t>(arg),from};
+    return comtojbyteArray(env,command);
     }
 
 extern "C" JNIEXPORT  jbyteArray JNICALL  fromjava(libre3EventLogControl)(JNIEnv *env, jclass thiz, jint arg) {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "jgchat/ui_messages.hpp"
 #include "jgchat/timeline.hpp"
 #include <algorithm>
 #include <charconv>
@@ -25,10 +26,10 @@ std::vector<std::string_view> split(std::string_view text, char delimiter) {
 std::string local_time(uint32_t at) {
     const time_t stamp = at; tm time{}; char result[64]{};
     if (!localtime_r(&stamp, &time) || !strftime(result, sizeof(result), "%Y-%m-%dT%H:%M:%S%z", &time))
-        throw std::runtime_error("Cannot format timeline time");
+        throw jgchat::UiError(jgchat::UiCode::cannot_format_timeline_time);
     return result;
 }
-void check(const std::atomic_bool* cancel) { if (cancel && cancel->load()) throw std::runtime_error("Request cancelled"); }
+void check(const std::atomic_bool* cancel) { if (cancel && cancel->load()) throw jgchat::UiError(jgchat::UiCode::request_cancelled); }
 struct Summary {
     unsigned count{}, max_gap{};
     Reading first{}, last{}, min{}, max{};
@@ -55,9 +56,9 @@ Json make_stream_gaps(const Json& glucose, uint32_t minimum, const std::atomic_b
         return {{"status", "error"}, {"error", {{"code", "stream_analysis_truncated"},
             {"message", "Stream export was truncated. Shorten the interval; no partial gap analysis was returned."}}}};
     if (glucose.at("source") != "stream" || minimum < 60 || minimum > 86400)
-        throw std::runtime_error("Stream analysis requires stream data and a 1-1440 minute threshold");
+        throw jgchat::UiError(jgchat::UiCode::stream_analysis_requires_stream_data_and_a_1_1440_minute_threshold);
     const auto start = glucose.at("start").get<uint32_t>(), end = glucose.at("end").get<uint32_t>();
-    if (end <= start || end - start > 7U * 86400) throw std::runtime_error("Invalid stream analysis bounds");
+    if (end <= start || end - start > 7U * 86400) throw jgchat::UiError(jgchat::UiCode::invalid_stream_analysis_bounds);
     const auto& tsv = glucose.at("data").get_ref<const std::string&>();
     auto lines = split(tsv, '\n'), columns = split(lines.front(), '\t');
     auto column = [&](std::string_view name) { return std::find(columns.begin(), columns.end(), name) - columns.begin(); };
@@ -71,28 +72,28 @@ Json make_stream_gaps(const Json& glucose, uint32_t minimum, const std::atomic_b
     for (std::size_t row = 1; row < lines.size(); ++row) {
         check(cancel); if (lines[row].empty()) continue;
         const auto fields = split(lines[row], '\t');
-        if (fields.size() != columns.size() || ++count > 20000) throw std::runtime_error("Invalid stream row count");
+        if (fields.size() != columns.size() || ++count > 20000) throw jgchat::UiError(jgchat::UiCode::invalid_stream_row_count);
         uint32_t at{}; const auto field = fields[time_col];
         auto parsed = std::from_chars(field.data(), field.data() + field.size(), at);
         if (parsed.ec != std::errc{} || parsed.ptr != field.data() + field.size() || at < start || at >= end)
-            throw std::runtime_error("Invalid stream timestamp");
+            throw jgchat::UiError(jgchat::UiCode::invalid_stream_timestamp);
         const auto rate = fields[rate_col];
         const bool missing = rate == "nan" || rate == "+nan" || rate == "-nan" ||
             rate == "NaN" || rate == "+NaN" || rate == "-NaN";
         if (!missing) {
             std::istringstream input{std::string(rate)}; input.imbue(std::locale::classic()); double value{};
             if (!(input >> value) || !(input >> std::ws).eof() || !std::isfinite(value))
-                throw std::runtime_error("Invalid stream rate; unavailable rate must be a native NaN token");
+                throw jgchat::UiError(jgchat::UiCode::invalid_stream_rate_unavailable_rate_must_be_a_native_nan_token);
         }
         const auto id = fields[sensor_col];
-        if (id.empty() || id.size() > 128) throw std::runtime_error("Invalid stream sensor ID");
+        if (id.empty() || id.size() > 128) throw jgchat::UiError(jgchat::UiCode::invalid_stream_sensor_id);
         sensors[std::string(id)].push_back({at, !missing});
     }
     if (count != glucose.at("returned").get<unsigned>() || sensors.size() > 8)
-        throw std::runtime_error("Invalid stream count or more than eight sensors; shorten the interval");
+        throw jgchat::UiError(jgchat::UiCode::invalid_stream_count_or_more_than_eight_sensors_shorten_the_interval);
     Json intervals = Json::array(), summaries = Json::array();
     auto add = [&](Json value) {
-        if (intervals.size() >= 200) throw std::runtime_error("More than 200 stream intervals; shorten the window. No partial analysis returned.");
+        if (intervals.size() >= 200) throw jgchat::UiError(jgchat::UiCode::more_than_200_stream_intervals_shorten_the_window_no_partial_analysis_returned);
         intervals.push_back(std::move(value));
     };
     for (auto& [id, samples] : sensors) {
@@ -223,9 +224,9 @@ Json make_timeline(const Json& glucose, const Json& amounts, const Json& context
     const auto start = glucose.at("start").get<uint32_t>(), end = glucose.at("end").get<uint32_t>();
     if (!step || end <= start || (uint64_t(end) - start + step - 1) / step > 672 ||
         amounts.at("start") != start || amounts.at("end") != end)
-        throw std::runtime_error("Invalid timeline bounds");
+        throw jgchat::UiError(jgchat::UiCode::invalid_timeline_bounds);
     const auto unit = glucose.at("unit").get<std::string>();
-    if (unit != "mmol/L" && unit != "mg/dL") throw std::runtime_error("Invalid timeline unit");
+    if (unit != "mmol/L" && unit != "mg/dL") throw jgchat::UiError(jgchat::UiCode::invalid_timeline_unit);
     const auto& tsv = glucose.at("data").get_ref<const std::string&>();
     auto lines = split(tsv, '\n'), columns = split(lines.front(), '\t');
     auto column = [&](std::string_view name) {
@@ -234,26 +235,26 @@ Json make_timeline(const Json& glucose, const Json& amounts, const Json& context
     const auto time_col = column("UnixTime"), sensor_col = column("Sensorid");
     auto value_col = column(unit); if (value_col == columns.size()) value_col = column("Glucose");
     if (time_col == columns.size() || sensor_col == columns.size() || value_col == columns.size())
-        throw std::runtime_error("Missing timeline glucose columns");
+        throw jgchat::UiError(jgchat::UiCode::missing_timeline_glucose_columns);
     std::map<std::string, std::vector<Reading>> sensors;
     unsigned count = 0;
     for (std::size_t i = 1; i < lines.size(); ++i) {
         check(cancel); if (lines[i].empty()) continue;
         const auto fields = split(lines[i], '\t');
-        if (fields.size() != columns.size() || ++count > 20000) throw std::runtime_error("Invalid timeline row count");
+        if (fields.size() != columns.size() || ++count > 20000) throw jgchat::UiError(jgchat::UiCode::invalid_timeline_row_count);
         uint32_t at{}; const auto field = fields[time_col];
         auto parsed = std::from_chars(field.data(), field.data() + field.size(), at);
         if (parsed.ec != std::errc{} || parsed.ptr != field.data() + field.size() || at < start || at >= end)
-            throw std::runtime_error("Invalid timeline timestamp");
+            throw jgchat::UiError(jgchat::UiCode::invalid_timeline_timestamp);
         std::istringstream value{std::string(fields[value_col])}; value.imbue(std::locale::classic());
         double v{};
         if (!(value >> v) || !(value >> std::ws).eof() || !std::isfinite(v) || v < 0 || v > 10000)
-            throw std::runtime_error("Invalid timeline glucose value");
-        if (fields[sensor_col].empty() || fields[sensor_col].size() > 128) throw std::runtime_error("Invalid timeline sensor");
+            throw jgchat::UiError(jgchat::UiCode::invalid_timeline_glucose_value);
+        if (fields[sensor_col].empty() || fields[sensor_col].size() > 128) throw jgchat::UiError(jgchat::UiCode::invalid_timeline_sensor);
         sensors[std::string(fields[sensor_col])].push_back({at, v});
     }
     if (count != glucose.at("returned").get<unsigned>() || sensors.size() > 8)
-        throw std::runtime_error("Invalid timeline count or more than eight sensors; shorten the interval");
+        throw jgchat::UiError(jgchat::UiCode::invalid_timeline_count_or_more_than_eight_sensors_shorten_the_interval);
     const auto bins = (uint64_t(end) - start + step - 1) / step;
     std::vector<Json> glucose_bins(bins, Json::array()), amount_bins(bins, Json::array());
     Json summaries = Json::array();
@@ -269,11 +270,11 @@ Json make_timeline(const Json& glucose, const Json& amounts, const Json& context
     }
     const auto& entries = amounts.at("records");
     if (!entries.is_array() || entries.size() > 1000 || entries.size() != amounts.at("returned").get<std::size_t>())
-        throw std::runtime_error("Invalid timeline amount count");
+        throw jgchat::UiError(jgchat::UiCode::invalid_timeline_amount_count);
     for (auto entry : entries) {
         check(cancel);
         const auto at = entry.at("time").get<uint32_t>();
-        if (at < start || at >= end) throw std::runtime_error("Amount outside timeline bounds");
+        if (at < start || at >= end) throw jgchat::UiError(jgchat::UiCode::amount_outside_timeline_bounds);
         entry["local_time"] = local_time(at);
         amount_bins[(at - start) / step].push_back(std::move(entry));
     }

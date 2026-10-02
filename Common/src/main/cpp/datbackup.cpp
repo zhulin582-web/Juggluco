@@ -871,7 +871,7 @@ Backup::Backup(std::string_view base): mapdata(base,backupdat,sizeof(struct upda
           if(getupdatedata()->allhosts[host.allindex].wearos) {
               if(settings->data()->sendnumbers)
                     host.sendLibre=true;
-              if(settings->data()->saytreatments ||settings->data()->postTreatments)
+              if(settings->data()->GiveAmounts ||settings->data()->postTreatments)
                     host.sendNight=true;
             }
 #endif

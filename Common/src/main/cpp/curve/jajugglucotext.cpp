@@ -108,7 +108,7 @@ const jugglucotext jatext {
 	.SD="標準偏差: %.2f",
 	.glucose_variability="血糖変動: %.1f%%",
      .menustr0={
-		"システムUI",
+		"ChatGPT",
 		"メニュー",
 		"ウォッチ",
 		"センサー",
@@ -136,7 +136,7 @@ const jugglucotext jatext {
 		"音声",
 		"フロート"
 		},
-	.menustr2= {"最終スキャン",
+	.menustr2= {"システムUI",
 	"スキャン",
 	"ストリーム",
 	"履歴",

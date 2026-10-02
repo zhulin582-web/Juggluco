@@ -217,7 +217,7 @@ void showinfo(final SuperGattCallback gatt,MainActivity act) {
         rssiview.setVisibility(VISIBLE);
     } else {
         rssiview.setText("");
-        rssiview.setVisibility(GONE);
+        rssiview.setVisibility(isWearable?INVISIBLE:GONE);
        }
          
     if(forget!=null)  {
@@ -574,7 +574,7 @@ bluediag(MainActivity act,final ArrayList<SuperGattCallback> gatts) {
                 new View[]{scanview},
                 new View[]{spin,address,forget,streaming,clear,android13},
                 new View[]{diagnosticGrid},
-                new View[]{rssiview,close});
+                new View[]{close,rssiview});
         content.setPadding(dp(30),dp(18),dp(8),dp(30));
 
         //androidx.core.widget.NestedScrollView vertical= new androidx.core.widget.NestedScrollView(act);

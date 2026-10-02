@@ -38,6 +38,15 @@ private static final String LOG_ID="NFC";
 public static	long   	second(byte[] nfc1,Tag tag,tk.glucodata.GlucoseCurve curve) {
 	long nowsec=(long)Math.round(System.currentTimeMillis()/1000.0);
     final long manual=Natives.manualLibreAccountIDnumber();
+    final int lingoVersion=Natives.lingoPatchSecurityVersion(nfc1);
+    if(lingoVersion!=0) {
+        // The independent Lingo credentials support security version 3 only.
+        if(lingoVersion!=3) {
+            Log.e(LOG_ID,"Unsupported Lingo security version or invalid patch info: "+lingoVersion);
+            return 0L;
+            }
+        return secondWithID(nfc1,tag,curve,nowsec,manual!=-1L?manual:1001L);
+        }
     if(manual!=-1L)  
         return secondWithID(nfc1,tag,curve,nowsec,manual);
 	final boolean activate=nfc1[17]==1;

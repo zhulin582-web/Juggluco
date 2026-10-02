@@ -1202,11 +1202,11 @@ extern "C" JNIEXPORT jfloat  JNICALL   fromjava(getlibrefoodweight)(JNIEnv *env,
     }
 
 #endif
-extern "C" JNIEXPORT void  JNICALL   fromjava(setsaytreatments)(JNIEnv *env, jclass cl,jboolean val) {
-    settings->data()->saytreatments=val;
+extern "C" JNIEXPORT void  JNICALL   fromjava(setGiveAmounts)(JNIEnv *env, jclass cl,jboolean val) {
+    settings->data()->GiveAmounts=val;
     }
-extern "C" JNIEXPORT jboolean  JNICALL   fromjava(getsaytreatments)(JNIEnv *env, jclass cl) {
-    return settings->data()->saytreatments;
+extern "C" JNIEXPORT jboolean  JNICALL   fromjava(getGiveAmounts)(JNIEnv *env, jclass cl) {
+    return settings->data()->GiveAmounts;
     }
 
 extern "C" JNIEXPORT jboolean  JNICALL   fromjava(getpostTreatments)(JNIEnv *env, jclass cl) {
@@ -1225,7 +1225,7 @@ extern "C" JNIEXPORT jboolean  JNICALL   fromjava(canSendNumbers)(JNIEnv *env, j
             return true;
         }
     else  {
-        if(settings->data()->saytreatments ||settings->data()->postTreatments)
+        if(settings->data()->GiveAmounts ||settings->data()->postTreatments)
             return true;
         }
     const auto *nums=night?settings->data()->Nightnums:settings->data()->librenums;

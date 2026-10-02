@@ -79,7 +79,7 @@ jugglucotext betext {
 	.SD="SD: %.2f",
 	.glucose_variability="Варыябельнасць глюкозы: %.1f%%",
      .menustr0={
-		"System UI",
+		"ChatGPT",
 		"Меню",
 		"Глядзець",
 		"Датчык",
@@ -107,7 +107,7 @@ jugglucotext betext {
 		"Размаўляць",
 		"Парыць"
 		},
-	.menustr2= {"Апошняе скан.",
+	.menustr2= {"System UI",
 	    "Сканы",
 	    "Паток",
 	    "Гісторыя",

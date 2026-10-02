@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "jgchat/ui_messages.hpp"
 #include "jgchat/tools.hpp"
 #include "jgchat/plot.hpp"
 #include "jgchat/files.hpp"
@@ -41,7 +42,7 @@ Json definition(const char *name, const char *description, Json properties, Json
 }
 
 [[noreturn]] void bad(std::string_view detail) {
-    throw std::invalid_argument("Invalid Juggluco tool arguments: " + std::string(detail));
+    throw UiArgumentError(UiMessage::detail(UiCode::invalid_tool_arguments, std::string(detail)));
 }
 void shape(const Json &args, std::initializer_list<std::string_view> keys) {
     if (!args.is_object()) bad("expected a JSON object.");
@@ -92,23 +93,23 @@ Json bounded(Json result) {
 using Headers = std::map<std::string_view, std::string_view>;
 uint64_t header_uint(const Headers &headers, std::string_view name) {
     auto found = headers.find(name);
-    if (found == headers.end()) throw std::runtime_error("Local data response is missing metadata.");
+    if (found == headers.end()) throw jgchat::UiError(jgchat::UiCode::local_data_response_is_missing_metadata);
     const auto value = found->second;
     uint64_t out = 0;
     const auto [end, ec] = std::from_chars(value.data(), value.data() + value.size(), out);
     if (ec != std::errc() || end != value.data() + value.size())
-        throw std::runtime_error("Invalid numeric local data metadata.");
+        throw jgchat::UiError(jgchat::UiCode::invalid_numeric_local_data_metadata);
     return out;
 }
 bool header_bool(const Headers &headers, std::string_view name) {
     auto found = headers.find(name);
     if (found == headers.end() || (found->second != "true" && found->second != "false"))
-        throw std::runtime_error("Invalid boolean local data metadata.");
+        throw jgchat::UiError(jgchat::UiCode::invalid_boolean_local_data_metadata);
     return found->second == "true";
 }
 std::string header_text(const Headers &headers, std::string_view name) {
     auto found = headers.find(name);
-    if (found == headers.end()) throw std::runtime_error("Local data response is missing metadata.");
+    if (found == headers.end()) throw jgchat::UiError(jgchat::UiCode::local_data_response_is_missing_metadata);
     return std::string(found->second);
 }
 
@@ -120,12 +121,12 @@ Json unwrap(std::string_view response, std::string_view source, std::size_t byte
     const auto first_end = response.find("\r\n");
     if (split == std::string_view::npos || first_end == std::string_view::npos ||
         first_end >= split || !response.starts_with("HTTP/1.1 "))
-        throw std::runtime_error("Malformed local Juggluco data response.");
+        throw jgchat::UiError(jgchat::UiCode::malformed_local_juggluco_data_response);
     unsigned status = 0;
     const char *code = response.data() + 9;
     const auto [status_end, status_ec] = std::from_chars(code, response.data() + first_end, status);
     if (status_ec != std::errc() || status_end == response.data() + first_end || *status_end != ' ')
-        throw std::runtime_error("Invalid local Juggluco response status.");
+        throw jgchat::UiError(jgchat::UiCode::invalid_local_juggluco_response_status);
     Headers headers;
     auto cursor = first_end + 2;
     while (cursor < split) {
@@ -133,18 +134,18 @@ Json unwrap(std::string_view response, std::string_view source, std::size_t byte
         const auto line = response.substr(cursor, end - cursor);
         const auto colon = line.find(": ");
         if (colon == std::string_view::npos || !headers.emplace(line.substr(0, colon), line.substr(colon + 2)).second)
-            throw std::runtime_error("Invalid local Juggluco response header.");
+            throw jgchat::UiError(jgchat::UiCode::invalid_local_juggluco_response_header);
         cursor = end + 2;
     }
     const auto body = response.substr(split + 4);
     if (header_uint(headers, "Content-Length") != body.size())
-        throw std::runtime_error("Local Juggluco response length mismatch.");
+        throw jgchat::UiError(jgchat::UiCode::local_juggluco_response_length_mismatch);
     if (body.size() > byte_limit) return too_large(byte_limit);
     const auto type = header_text(headers, "Content-Type");
     Json result;
     if (std::string_view(type).starts_with("application/json")) {
         result = Json::parse(body);
-        if (!result.is_object()) throw std::runtime_error("Local Juggluco JSON result must be an object.");
+        if (!result.is_object()) throw jgchat::UiError(jgchat::UiCode::local_juggluco_json_result_must_be_an_object);
     } else if (status == 200 && type == "text/tab-separated-values; charset=utf-8") {
         result = {{"schema", 1}, {"format", "tsv"}, {"source", source},
                   {"data", std::string(body)},
@@ -157,7 +158,7 @@ Json unwrap(std::string_view response, std::string_view source, std::size_t byte
                   {"unit", header_text(headers, "X-Juggluco-Unit")},
                   {"calibrated", header_bool(headers, "X-Juggluco-Calibrated")},
                   {"pastvalues", header_bool(headers, "X-Juggluco-Pastvalues")}};
-    } else throw std::runtime_error("Unexpected local Juggluco response content type.");
+    } else throw jgchat::UiError(jgchat::UiCode::unexpected_local_juggluco_response_content_type);
     result["status"] = status == 200 ? "ok" : "error";
     result["http_status"] = status;
     result["content_type"] = type;
@@ -170,7 +171,7 @@ std::vector<std::string> glucose_sensor_ids(const Json& glucose) {
     auto field = [](std::string_view line, std::size_t column) {
         while (column--) {
             const auto tab = line.find('\t');
-            if (tab == std::string_view::npos) throw std::runtime_error("Missing glucose sensor column");
+            if (tab == std::string_view::npos) throw jgchat::UiError(jgchat::UiCode::missing_glucose_sensor_column);
             line.remove_prefix(tab + 1);
         }
         return line.substr(0, line.find('\t'));
@@ -178,7 +179,7 @@ std::vector<std::string> glucose_sensor_ids(const Json& glucose) {
     std::size_t column = 0;
     const auto columns = 1 + std::count(header.begin(), header.end(), '\t');
     while (column < static_cast<std::size_t>(columns) && field(header, column) != "Sensorid") ++column;
-    if (column == static_cast<std::size_t>(columns)) throw std::runtime_error("Missing glucose Sensorid header");
+    if (column == static_cast<std::size_t>(columns)) throw jgchat::UiError(jgchat::UiCode::missing_glucose_sensorid_header);
     std::set<std::string> ids;
     for (auto start = header_end; start != std::string::npos;) {
         ++start;
@@ -298,7 +299,7 @@ Json data_tool_definitions() {
          {"sensor_index", {{"type", Json::array({"integer", "null"})}, {"minimum", 0}, {"maximum", 1000000}}}},
         Json::array({"sensor_id", "sensor_index"})));
     definitions.push_back(definition("juggluco_devices",
-        "Read current mirror configuration, directions, transport, sync observations, configured Wear OS watches and Android's cached reachable watch names. No passwords, keys or ICE rendezvous labels. These current settings do not establish each historical reading's transport, a watch's live sensor connection, or its remote alarm settings.",
+        "For 'what is my sensor connected to?' or 'where does glucose come from?', read this combined view: phone sensor diagnostics, Garmin watches and direct-Libre3 receiver selection, mirror send/receive directions and eligibility, Wear OS mirrors and cached node names. libre3_direct identifies sensor-to-Garmin mode, independently of Mirrors. receive=false excludes a mirror as an incoming source; recent last_sync_at does not override direction. Juggluco sensor Bluetooth preference is distinct from the Android radio. Includes observed_at/stale on Android caches; configuration and observations are distinguished. No secrets, network probes or per-reading delivery history.",
         Json::object(), Json::array()));
     definitions.push_back(definition("juggluco_alarms",
         "Read local phone alarm profiles, active profile, scheduled profile switches, glucose thresholds (mg/dL), loss delay, sound/vibration/flash/suspension and amount reminders. These are current settings, not evidence an alarm sounded or historical thresholds; remote-watch settings and Android permission/volume state are not known.",
@@ -308,7 +309,7 @@ Json data_tool_definitions() {
         {{"section", {{"type", "string"}, {"enum", Json::array({"glucose_meters", "broadcasts", "libreview", "web_server", "uploader", "display", "numbers", "talk", "bluetooth"})}}}},
         Json::array({"section"})));
     definitions.push_back(definition("juggluco_activity",
-        "Read phone-side sensor diagnostics as in bluediag, or Garmin watch status as in GarminStatus. Includes scan/connection/handshake/glucose success and failure timestamps, RSSI if observed, or per-watch transport/preferences/acknowledgements. Cached about every 5 seconds during chat; check observed_at, stale and truncated. No active discovery/reconnect. Distinguish old failures, present glucose without Rate, phone-to-watch transport and sensor-to-watch configuration; not historical error logs or remote watch state.",
+        "Read phone sensor diagnostics as in bluediag, or Garmin status as in GarminStatus. Includes scan/connection/handshake/glucose timestamps and RSSI, or per-watch transport/preferences/acknowledgements and selected direct Libre 3 receiver/path. Garmin sensor-to-watch mode is libre3_direct, not direct_ble (phone-to-watch transport). For a complete source/destination assessment use juggluco_devices, which includes both sections plus mirror directions. Cached about every 5 seconds; check observed_at, stale and truncated. No active probes or remote live sensor-link state.",
         {{"section", {{"type", "string"}, {"enum", Json::array({"sensors", "garmin"})}}}}, Json::array({"section"})));
     auto timeline = definitions[1];
     timeline["name"] = "juggluco_timeline";
@@ -328,7 +329,7 @@ Json data_tool_definitions() {
 }
 
 Json execute_data_tool(std::string_view name, const Json &args, const std::atomic_bool* cancel) {
-    if (cancel && cancel->load()) throw std::runtime_error("Request cancelled");
+    if (cancel && cancel->load()) throw jgchat::UiError(jgchat::UiCode::request_cancelled);
     if (name == "juggluco_stream_gaps") {
         shape(args, {"start", "end", "minimum_minutes"});
         const auto start = uint_value(args, "start"), end = uint_value(args, "end"), minutes = uint_value(args, "minimum_minutes");
@@ -392,7 +393,7 @@ Json execute_data_tool(std::string_view name, const Json &args, const std::atomi
         if (past && !calibrated) bad("pastvalues=true requires calibrated=true.");
         glucose_query += std::string("&calibrated=") + (calibrated ? "1" : "0") + "&pastvalues=" + (past ? "1" : "0");
         auto glucose = unwrap(jgchatdata::handle_request(std::string(source == "stream" ? "/v1/glucose" : "/v1/history") + glucose_query), source, 8U * 1024U * 1024U);
-        if (cancel && cancel->load()) throw std::runtime_error("Request cancelled");
+        if (cancel && cancel->load()) throw jgchat::UiError(jgchat::UiCode::request_cancelled);
         auto amounts = unwrap(jgchatdata::handle_request("/v1/amounts" + query + "&limit=1000"), "amounts");
         auto context = unwrap(jgchatdata::handle_request("/v1/metadata"), "context");
         auto result = make_timeline(glucose, amounts, context, minutes * 60, [](uint32_t at) {
@@ -476,7 +477,7 @@ Json execute_data_tool(std::string_view name, const Json &args, const std::atomi
         Json records = Json::array();
         unsigned unavailable = 0;
         for (uint64_t at = start; at < end; at += step) {
-            if (cancel && cancel->load()) throw std::runtime_error("Request cancelled");
+            if (cancel && cancel->load()) throw jgchat::UiError(jgchat::UiCode::request_cancelled);
             auto sample = unwrap(jgchatdata::handle_request("/v1/iob?at=" + std::to_string(at)), "iob");
             if (sample.value("status", "error") != "ok") return sample;
             const auto& iob = sample.at("iob");
@@ -523,7 +524,7 @@ Json execute_data_tool(std::string_view name, const Json &args, const std::atomi
         const bool calibrated = bool_value(args, "calibrated"), pastvalues = bool_value(args, "pastvalues");
         if (pastvalues && !calibrated) bad("pastvalues=true requires calibrated=true.");
         target += std::string("&calibrated=") + (calibrated ? "1" : "0") + "&pastvalues=" + (pastvalues ? "1" : "0");
-    } else throw std::invalid_argument("Unknown Juggluco data tool.");
+    } else throw jgchat::UiArgumentError(jgchat::UiCode::unknown_juggluco_data_tool);
     const auto output_limit = name == "juggluco_glucose_dataset" ? 2U * 1024U * 1024U : max_output_bytes;
     auto result = unwrap(jgchatdata::handle_request(target), source,output_limit);
     if ((name == "juggluco_glucose" || name == "juggluco_plot_glucose" || name == "juggluco_glucose_dataset") && result.value("status", "error") == "ok") {
@@ -537,7 +538,7 @@ Json execute_data_tool(std::string_view name, const Json &args, const std::atomi
         result["nutrition"] = jgchatdata::nutrition_context();
         result["statistics"] = {{"tool", "juggluco_statistics"}, {"max_days", 90},
             {"method", "Juggluco native statistics exporter; whole-day windows and actual returned data bounds."}};
-        result["additional_context_tools"] = {{"sensors", "juggluco_sensors"}, {"sensor_by_id", "juggluco_sensor"}, {"mirrors_and_wear_os", "juggluco_devices"},
+        result["additional_context_tools"] = {{"sensors", "juggluco_sensors"}, {"sensor_by_id", "juggluco_sensor"}, {"sensor_connections_mirrors_garmin_wear_os", "juggluco_devices"},
             {"phone_alarms", "juggluco_alarms"}, {"aligned_analysis", "juggluco_timeline"},
             {"exchange_display_numbers_talk", "juggluco_settings"}, {"sensor_and_garmin_activity", "juggluco_activity"}};
         return bounded(std::move(result));

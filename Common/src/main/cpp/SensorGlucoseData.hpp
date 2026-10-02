@@ -413,6 +413,8 @@ union {
         struct {
               uint16_t wearduration2;
               uint8_t warmup2;
+              // Unused bytes of the existing Libre 3 ident union; no layout change.
+              uint16_t lingoSecurityVersion;
            };
         struct {
               uint16_t askEarlier;
@@ -458,7 +460,8 @@ uint32_t lockcount;
 int8_t streamingIsEnabled;
 int8_t patchState; //Used for Libre3 reused for AidexX add starttime
 uint8_t manualwarmup;
-uint8_t reserved4:4;
+uint8_t reserved4:3;
+bool lingo:1;
 bool isAidexX:1;
 bool air:1;
 bool accuChek:1;
@@ -1205,6 +1208,9 @@ E07A-000T3YL1R50
     }
  bool isLibre3() const {
     return !isAir()&&!isAidexX()&&!isAccuChek()&&!isSibionics()&&!isDexcom()&&(getinfo()->interval==interval5);
+    }
+ bool isLingo() const {
+    return isLibre3() && getinfo()->lingo;
     }
  bool isLibre2() const {
    return !(isAccuChek()||isSibionics()||isAidexX()||isDexcom()||isAir()||getinfo()->interval==interval5);
@@ -2540,6 +2546,8 @@ static int getmaxmgdL(int sensorgen)  {
         };
     };
 int getmaxmgdL() const {
+        if(isLingo())
+                return 200;
         if(isDexcom()||isAccuChek())
                 return 400;
         if(isSibionics()||isAidexX())
@@ -2791,4 +2799,3 @@ private:
    SensorGlucoseData *sens;
    int index;
 };
-

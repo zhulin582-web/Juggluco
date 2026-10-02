@@ -215,7 +215,7 @@ struct Tings {
     bool USE_ALARMoff:1;
     bool watchdrip:1;
     bool android13:1;
-    bool saytreatments:1;
+    bool GiveAmounts:1;
     bool useSSL:1;
     bool floatingNotTouchable:1;
     bool hour24:1;

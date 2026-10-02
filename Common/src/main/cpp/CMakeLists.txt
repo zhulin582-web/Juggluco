@@ -67,7 +67,7 @@ set(EXTRAVIEW ${NETDIR}/libreview/putsensor.cpp ${NETDIR}/libreview/mkrealhistor
 
 #set(LIBRE3FILES ${INCLUDESELF}/libre3/loadlibs.cpp ${INCLUDESELF}/libre3/bluetooth.cpp ${INCLUDESELF}/libre3/nfc.cpp ${INCLUDESELF}/libre3/libre3_old_policy_bypass.c ) # ${INCLUDESELF}/libre3/libre3_postgen_dump.cpp )
 if(libre3)
-    set(LIBRE3FILES ${INCLUDESELF}/libre3/loadlibs.cpp ${INCLUDESELF}/libre3/bluetooth.cpp ${INCLUDESELF}/libre3/nfc.cpp  ) # ${INCLUDESELF}/libre3/libre3_postgen_dump.cpp )
+    set(LIBRE3FILES ${INCLUDESELF}/libre3/loadlibs.cpp ${INCLUDESELF}/libre3/bluetooth.cpp ${INCLUDESELF}/libre3/nfc.cpp ${INCLUDESELF}/libre3/lingo_realtime.c ) # ${INCLUDESELF}/libre3/libre3_postgen_dump.cpp )
 endif()
 
 
@@ -374,9 +374,9 @@ add_subdirectory(libjuice)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/jgchat/android/integration.cmake")
 
-if(ANDROID AND NOT WEAROS)
-    include("${CMAKE_CURRENT_SOURCE_DIR}/jgice/android/integration.cmake")
-endif()
+#if(ANDROID AND NOT WEAROS)
+#    include("${CMAKE_CURRENT_SOURCE_DIR}/jgice/android/integration.cmake")
+#endif()
 
 
 target_link_libraries( g PRIVATE  c++_static c   ${log-lib} ${OPENGL_LIB} android EGL m atomic z dl  $<BUILD_INTERFACE:juice>)

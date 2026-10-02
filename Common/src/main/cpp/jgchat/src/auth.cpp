@@ -3,6 +3,7 @@
 // 2025 OpenAI, Apache-2.0, commit e72da2b53805894878023d01949a25a082e0a5cb:
 // codex-rs/login/src/{device_code_auth.rs,server.rs,oauth/client.rs,
 // auth/manager.rs,token_data.rs}. See licenses/Codex-{Apache-2.0,NOTICE}.txt.
+#include "jgchat/ui_messages.hpp"
 #include "jgchat/auth.hpp"
 #include "jgchat/diagnostics.hpp"
 
@@ -24,10 +25,10 @@ using Clock = std::chrono::steady_clock;
 using Milliseconds = std::chrono::milliseconds;
 
 [[noreturn]] void invalid() {
-    throw std::runtime_error("Invalid authentication response");
+    throw jgchat::UiError(jgchat::UiCode::invalid_authentication_response);
 }
 void cancelled(const std::atomic_bool& cancel) {
-    if (cancel.load()) throw std::runtime_error("Authentication cancelled");
+    if (cancel.load()) throw jgchat::UiError(jgchat::UiCode::authentication_cancelled);
 }
 bool success(long status) { return status >= 200 && status < 300; }
 bool safe_string(std::string_view value, std::size_t limit) {
@@ -109,7 +110,7 @@ unsigned interval_field(const Json& object) {
 Milliseconds remaining(Clock::time_point deadline, const std::atomic_bool& cancel) {
     cancelled(cancel);
     const auto now = Clock::now();
-    if (now >= deadline) throw std::runtime_error("Device authorization expired");
+    if (now >= deadline) throw jgchat::UiError(jgchat::UiCode::device_authorization_expired);
     return std::max(Milliseconds(1), std::min(Milliseconds(60000),
         std::chrono::duration_cast<Milliseconds>(deadline - now)));
 }
@@ -139,7 +140,7 @@ HttpResponse send_request(const HttpClient& http, const HttpRequest& req,
         if (cancel.load()) trace.cancelled();
         cancelled(cancel);
         // A transport exception can contain request bodies and bearer tokens.
-        throw std::runtime_error("Authentication network request failed");
+        throw jgchat::UiError(jgchat::UiCode::authentication_network_request_failed);
     }
     // A refresh may already have rotated its token. Do not throw away a received
     // success just because cancellation arrived concurrently; the caller must
@@ -148,7 +149,7 @@ HttpResponse send_request(const HttpClient& http, const HttpRequest& req,
         result.status, result.body.size(), result.error.empty() ? 0 : 1, cancel.load() ? 1 : 0);
     if (cancel.load() && (!retain_success || !success(result.status))) trace.cancelled();
     if (!retain_success || !success(result.status)) cancelled(cancel);
-    if (!result.error.empty()) throw std::runtime_error("Authentication network request failed");
+    if (!result.error.empty()) throw jgchat::UiError(jgchat::UiCode::authentication_network_request_failed);
     if (result.body.size() > response_limit) invalid();
     trace.success();
     return result;
@@ -156,9 +157,9 @@ HttpResponse send_request(const HttpClient& http, const HttpRequest& req,
 void require_success(const HttpResponse& response, bool refresh = false) {
     if (success(response.status)) return;
     if (refresh && (response.status == 401 || response.status == 403))
-        throw std::runtime_error("ChatGPT sign-in expired; sign in again");
+        throw jgchat::UiError(jgchat::UiCode::chatgpt_sign_in_expired_sign_in_again);
     // Do not include the response body, transport error, or OAuth error details.
-    throw std::runtime_error("Authentication request failed (HTTP " + std::to_string(response.status) + ")");
+    throw UiError({UiCode::authentication_http, {std::to_string(response.status)}});
 }
 std::string form_escape(std::string_view value) {
     constexpr char hex[] = "0123456789ABCDEF";
@@ -264,7 +265,7 @@ void poll_wait(unsigned seconds, Clock::time_point deadline, const std::atomic_b
     for (;;) {
         cancelled(cancel);
         const auto now = Clock::now();
-        if (now >= deadline) throw std::runtime_error("Device authorization expired");
+        if (now >= deadline) throw jgchat::UiError(jgchat::UiCode::device_authorization_expired);
         if (now >= next) return;
         std::this_thread::sleep_for(std::min(Milliseconds(100),
             std::max(Milliseconds(1), std::chrono::duration_cast<Milliseconds>(next - now))));

@@ -221,7 +221,7 @@ int   listconnections() {
        showtreatments(true);
        cout<<"Libreview:"<<endl;  
        showtreatments(false);
-        cout<<"api/v1/treatments turned "<<(settings->data()->saytreatments?"on":"off")<<endl;
+        cout<<"api/v1/treatments turned "<<(settings->data()->GiveAmounts?"on":"off")<<endl;
         if(settings->data()->apisecretlength) {
             settings->data()->apisecret[settings->data()->apisecretlength]='\0';
             cout<<"api_secret: "<<settings->data()->apisecret<<endl<<endl;
@@ -636,7 +636,7 @@ static constexpr const    char defaultname[]="jugglucodata";
         did=true;
         }
     if(give_treatments>=0) {
-        settings->data()->saytreatments=give_treatments;
+        settings->data()->GiveAmounts=give_treatments;
         did=true;
         }
     if(httpport) {

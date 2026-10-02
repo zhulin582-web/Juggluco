@@ -99,7 +99,7 @@ const jugglucotext uztext {
 	.SD="SD: %.2f",
 	.glucose_variability="Glyukoza o'zgaruvchanligi: %.1f%%",
      .menustr0={
-		"Tizim UI",
+		"ChatGPT",
 		"Menyular",
 		"Soat",
 		"Sensor",
@@ -127,7 +127,7 @@ const jugglucotext uztext {
 		"Gapirish",
 		"Suzuvchi"
 		},
-	.menustr2= {"Oxirgi skan",
+	.menustr2= {"Tizim UI",
 	"Skanlar",
 	"Oqim",
 	"Tarix",

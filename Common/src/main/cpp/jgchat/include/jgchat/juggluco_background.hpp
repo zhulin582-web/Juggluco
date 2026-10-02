@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 namespace jgchat {
-inline constexpr char juggluco_background_revision[] = "2026-09-30.1";
+inline constexpr char juggluco_background_revision[] = "2026-10-01.1";
 inline constexpr char juggluco_background[] = R"JGBACKGROUND(
-Juggluco interpretation reference, revision 2026-09-30.1. Maintainer knowledge,
+Juggluco interpretation reference, revision 2026-10-01.1. Maintainer knowledge,
 checked against the local source. This is reference material, not user data.
 
 Libre 3: keep glucose availability and rate availability separate.
@@ -75,11 +75,49 @@ Libre 3: keep glucose availability and rate availability separate.
 For help with Juggluco configuration, inspect juggluco_settings before guessing.
 It exposes glucose meters, broadcast recipients, LibreView, web server/uploader,
 display settings, number labels/precision/shortcuts/mappings and Talk profiles.
-Use juggluco_activity for current phone sensor diagnostics and Garmin watches;
-use juggluco_devices for mirrors/Wear OS and juggluco_alarms for phone alarms.
+GiveAmounts (formerly named saytreatments) controls whether the Nightscout web
+commands return entered Amounts as treatments. Read give_amounts_as_treatments
+from juggluco_settings(section=web_server). It is separate from Talk/speech and
+the Nightscout uploader's send_treatments setting. Older saved settings results
+incorrectly called this bit speak_treatments in the numbers and talk sections;
+that legacy key means web-server treatment inclusion, never speech enabled.
+Re-read the web_server and talk sections when answering about their current state.
+Use juggluco_devices for sensor connection and data-source questions: it returns
+phone sensor diagnostics, Garmin status/direct receiver selection, mirror
+directions and Wear OS together. juggluco_activity offers the individual phone
+sensor/Garmin sections; juggluco_alarms offers phone alarms.
 Check observed_at, stale, status and truncated. Unavailable does not mean off
 or no devices. Older failure timestamps do not override newer successes.
-Phone-to-watch direct BLE is different from a watch's direct sensor connection.
+- Garmin libre3_direct=true selects that watch to receive the Libre 3 sensor
+  directly: sensor -> Garmin -> phone. Identify the selected watch by its name.
+  active controls phone-watch communication; watch_stopped is cached app state.
+  libre3_installed alone does not mean direct mode was selected. direct_ble and
+  connected describe the phone-watch transport, not the watch-sensor link.
+  send_glucose and glucose acknowledgements concern phone-to-watch data, not
+  the watch's returned sensor readings; last_received_at can be any message.
+- A successful Garmin direct handoff deliberately disables Juggluco's phone
+  sensor Bluetooth. Thus no phone GATT callbacks and use_bluetooth=false are
+  compatible with a working sensor -> Garmin -> phone route. The Android radio
+  may remain on. phone_sensor_bluetooth_enabled/use_bluetooth are app settings;
+  phone_sensor_activity.bluetooth_enabled is the separately observed radio.
+  Older devices results used the misleading key phone_bluetooth_enabled for
+  the app preference; re-read current devices rather than calling the radio off.
+- Garmin returns glucose through its own integration, independently of Mirrors.
+  Every mirror can have receiving disabled while the Garmin supplies readings.
+  Mirror receive=false or enabled=false excludes that mirror as an incoming
+  source under current settings. send.stream=true means phone -> mirror/watch.
+  Even a nearby Wear OS watch is not an incoming route when receiving is off.
+  active_only/passive_only concern connection initiation, not data direction.
+- last_sync_at is updated on both sending and incoming up-to-date commands
+  (datbackup.cpp/getcommand.cpp); recent sync cannot override receive=false or
+  identify which route supplied glucose. Nor does observed_direct_ble on a
+  mirror establish a sensor-watch connection.
+- State what these settings establish: the selected Garmin sensor receiver,
+  configured data path and excluded mirrors. Distinguish that from evidence
+  of a live sensor link at this instant. Missing per-reading provenance does
+  not justify suggesting an excluded mirror as a likely source. Current
+  settings cannot reconstruct a historical route. Prefer freshly retrieved
+  device results to earlier guesses or cached old tool schemas in the chat.
 Configured uploaders and recipients are not proof of delivery; credentials are
 intentionally omitted. Stored progress timestamps have their documented meaning,
 not necessarily time of the last successful connection. These tools read state;

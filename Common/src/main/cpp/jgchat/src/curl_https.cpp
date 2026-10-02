@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "jgchat/ui_messages.hpp"
 #include "jgchat/http.hpp"
 #include "jgchat/http_response.hpp"
 #include <curl/curl.h>
@@ -15,7 +16,7 @@ std::once_flag init_once;
 CURLcode init_result = CURLE_FAILED_INIT;
 struct Reader {
     HttpResponseParser parser;
-    std::string error;
+    UiMessage error;
     Reader(std::size_t maximum, HttpBodySink sink) : parser(maximum, std::move(sink)) {}
 };
 std::size_t receive(char* bytes, std::size_t size, std::size_t count, void* opaque) {
@@ -23,8 +24,7 @@ std::size_t receive(char* bytes, std::size_t size, std::size_t count, void* opaq
     if (size && count > static_cast<std::size_t>(-1) / size) return 0;
     const auto length = size * count;
     try { reader.parser.append(std::string_view(bytes, length)); }
-    catch (const std::exception& e) { reader.error = e.what(); return 0; }
-    catch (...) { reader.error = "HTTPS response processing failed"; return 0; }
+    catch (...) { reader.error = current_ui_error(); return 0; }
     return length;
 }
 int progress(void* opaque, curl_off_t, curl_off_t, curl_off_t, curl_off_t) {
@@ -32,11 +32,11 @@ int progress(void* opaque, curl_off_t, curl_off_t, curl_off_t, curl_off_t) {
 }
 HttpResponse perform(const HttpRequest& request, const std::atomic_bool& cancel) {
     validate_http_request(request);
-    if (cancel.load()) return {0, {}, "HTTPS cancelled"};
+    if (cancel.load()) return http_failure(UiCode::https_cancelled);
     std::call_once(init_once, [] { init_result = curl_global_init(CURL_GLOBAL_DEFAULT); });
-    if (init_result != CURLE_OK) throw std::runtime_error("HTTPS library initialization failed");
+    if (init_result != CURLE_OK) throw jgchat::UiError(jgchat::UiCode::https_library_initialization_failed);
     std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> handle(curl_easy_init(), curl_easy_cleanup);
-    if (!handle) throw std::runtime_error("HTTPS request allocation failed");
+    if (!handle) throw jgchat::UiError(jgchat::UiCode::https_request_allocation_failed);
     auto* curl = handle.get();
     Reader reader(request.max_response_bytes, request.on_body);
     const auto url = "https://" + request.host + ":" + std::to_string(request.port) + request.path;
@@ -77,7 +77,7 @@ HttpResponse perform(const HttpRequest& request, const std::atomic_bool& cancel)
     std::unique_ptr<curl_slist, decltype(&curl_slist_free_all)> headers(nullptr, curl_slist_free_all);
     auto add = [&](const std::string& value) {
         auto* next = curl_slist_append(headers.get(), value.c_str());
-        if (!next) throw std::runtime_error("HTTPS header allocation failed");
+        if (!next) throw jgchat::UiError(jgchat::UiCode::https_header_allocation_failed);
         headers.release(); headers.reset(next);
     };
     for (const auto& [key, value] : request.headers) add(key + ": " + value);
@@ -98,11 +98,11 @@ HttpResponse perform(const HttpRequest& request, const std::atomic_bool& cancel)
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers.get());
     const auto result = curl_easy_perform(curl);
     if (result != CURLE_OK) {
-        if (cancel.load()) return {0, {}, "HTTPS cancelled"};
-        if (!reader.error.empty()) return {0, {}, reader.error};
+        if (cancel.load()) return http_failure(UiCode::https_cancelled);
+        if (!reader.error.empty()) return http_failure(reader.error);
         // curl's detailed error buffer can contain URL/query text. Use only its
         // fixed code description so credentials cannot enter transport errors.
-        return {0, {}, std::string("HTTPS transport failed: ") + curl_easy_strerror(result)};
+        return http_failure(UiMessage::detail(UiCode::https_transport_failed, curl_easy_strerror(result)));
     }
     return reader.parser.finish();
 }
@@ -110,8 +110,7 @@ HttpResponse perform(const HttpRequest& request, const std::atomic_bool& cancel)
 HttpClient curl_https() {
     return [](const HttpRequest& request, const std::atomic_bool& cancel) -> HttpResponse {
         try { return perform(request, cancel); }
-        catch (const std::exception& e) { return {0, {}, e.what()}; }
-        catch (...) { return {0, {}, "HTTPS unexpected failure"}; }
+        catch (...) { return http_failure(current_ui_error()); }
     };
 }
 }

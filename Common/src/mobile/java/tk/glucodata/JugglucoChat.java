@@ -50,7 +50,10 @@ import android.view.inputmethod.EditorInfo;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.PopupWindow;
 import android.widget.Toast;
+import android.widget.Button;
+import android.widget.TextView;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
@@ -59,7 +62,6 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatDialog;
 import androidx.appcompat.widget.AppCompatButton;
-import androidx.appcompat.widget.AppCompatCheckBox;
 import androidx.appcompat.widget.AppCompatEditText;
 import androidx.appcompat.widget.AppCompatTextView;
 import androidx.core.graphics.ColorUtils;
@@ -99,26 +101,26 @@ public final class JugglucoChat {
 
     private JugglucoChat() {}
 
-    private static native String nativeInitWithFiles(String storageDir, String filesDir);
-    private static native String nativeStartLogin();
-    private static native String nativeLoadModels();
-    private static native String nativeSendWithOptions(String question, String model, String reasoningEffort, boolean internet);
-    private static native String nativeCancel();
-    private static native String nativeNewChat();
-    private static native String nativeClearAnalysis();
-    private static native String nativeLogout();
-    private static native String nativePoll();
-    private static native String nativePollWork();
-    private static native String nativeSetWearNodes(String snapshot);
-    private static native String nativeSetPhoneActivity(String snapshot);
+    private static native NativeMessage nativeInitWithFilesMessages(String storageDir, String filesDir);
+    private static native NativeMessage nativeStartLoginMessages();
+    private static native NativeMessage nativeLoadModelsMessages();
+    private static native NativeMessage nativeSendWithOptionsMessages(String question, String model, String reasoningEffort, boolean internet);
+    private static native NativeMessage nativeCancelMessages();
+    private static native NativeMessage nativeNewChatMessages();
+    private static native NativeMessage nativeClearAnalysisMessages();
+    private static native NativeMessage nativeLogoutMessages();
+    private static native String nativePollMessages();
+    private static native String nativePollWorkMessages();
+    private static native NativeMessage nativeSetWearNodesMessages(String snapshot);
+    private static native NativeMessage nativeSetPhoneActivityMessages(String snapshot);
     private static native String nativeGetPlot(int message, int plot);
-    private static native String nativeListFiles();
-    private static native String nativeFileUrl(String id, String file);
+    private static native String nativeListFilesMessages();
+    private static native String nativeFileUrlMessages(String id, String file);
     private static native String nativeTakeBrowserFile();
-    private static native String nativeExportFile(String filesDir, String id, String file, int descriptor);
-    private static native String nativeWriteChatExport(String format, int descriptor);
-    private static native String nativeWritePlotExport(String svg, int descriptor);
-    private static native String nativeCopyChatExport(int input, int output);
+    private static native NativeMessage nativeExportFileMessages(String filesDir, String id, String file, int descriptor);
+    private static native NativeMessage nativeWriteChatExportWithStringsMessages(String format, int descriptor, String labels);
+    private static native NativeMessage nativeWritePlotExportMessages(String svg, int descriptor);
+    private static native NativeMessage nativeCopyChatExportMessages(int input, int output);
 
     /** The manifest grants access only to the export cache, never app files. */
     @Keep
@@ -139,10 +141,13 @@ public final class JugglucoChat {
         boolean launched, preparing, writing, finished, delivered, resultError;
         String resultText = "", exportPath = "";
 
+        private Context textContext;
+        String s(int id, Object... args) { return textContext.getString(id, args); }
         public SaveFileFragment() {}
 
         @Override public void onCreate(Bundle state) {
             super.onCreate(state);
+            textContext = getActivity().getApplicationContext();
             setRetainInstance(true);
             if (state != null) {
                 launched = state.getBoolean("launched");
@@ -154,12 +159,12 @@ public final class JugglucoChat {
                     // Do not accidentally export a different chat after a
                     // process restart during snapshot preparation.
                     finished = resultError = true;
-                    resultText = "Preparing the export was interrupted. Try Save or Share again.";
+                    resultText = s(R.string.jgchat_preparing_the_export_was_interrupted_try_save_or_share_again);
                 }
                 if (state.getBoolean("writing") && !finished) {
                     // A new process cannot resume an old provider descriptor.
                     finished = resultError = true;
-                    resultText = "Saving was interrupted. Try Save as again. A partial copy may remain at the selected location.";
+                    resultText = s(R.string.jgchat_saving_was_interrupted_try_save_as_again_a_partial_copy_may_remain_at_the_selected_loc);
                 }
             }
         }
@@ -204,7 +209,7 @@ public final class JugglucoChat {
                             intent.putExtra(Intent.EXTRA_TEXT, new String(contents.toByteArray(), StandardCharsets.UTF_8));
                         }
                     }
-                    startActivity(Intent.createChooser(intent, "Share " + (name.endsWith(".svg") ? "plot" : "chat")));
+                    startActivity(Intent.createChooser(intent, (name.endsWith(".svg") ? s(R.string.jgchat_share_plot) : s(R.string.jgchat_share_chat))));
                     complete("", false);
                     return;
                 }
@@ -214,14 +219,14 @@ public final class JugglucoChat {
                 startActivityForResult(intent, CREATE_DOCUMENT);
             } catch (ActivityNotFoundException failure) {
                 complete(getArguments().getBoolean("share")
-                        ? "No installed app can receive this file format. Try Save instead."
-                        : "No Android document picker is available.", true);
+                        ? s(R.string.jgchat_no_installed_app_can_receive_this_file_format_try_save_instead)
+                        : s(R.string.jgchat_no_android_document_picker_is_available), true);
             } catch (IOException failure) {
-                complete("The prepared export is no longer available. Try Save or Share again.", true);
+                complete(s(R.string.jgchat_the_prepared_export_is_no_longer_available_try_save_or_share_again), true);
             } catch (RuntimeException failure) {
                 complete(getArguments().getBoolean("share")
-                        ? "Could not share the export. Check that the chat export provider and XML resource are installed."
-                        : "Could not open Android's Save as screen.", true);
+                        ? s(R.string.jgchat_could_not_share_the_export_check_that_the_chat_export_provider_and_xml_resource_are_in)
+                        : s(R.string.jgchat_could_not_open_android_s_save_as_screen), true);
             }
         }
         @Override public void onResume() { super.onResume(); launchPicker(); deliverResult(); }
@@ -230,15 +235,15 @@ public final class JugglucoChat {
             final Context app = getActivity().getApplicationContext();
             final String format = getArguments().getString("format");
             final String svg = getArguments().getString("svg");
-            Toast.makeText(app, "Preparing export…", Toast.LENGTH_SHORT).show();
+            Toast.makeText(app, s(R.string.jgchat_preparing_export), Toast.LENGTH_SHORT).show();
             new Thread(() -> {
                 File file = null;
                 String error = "";
                 try {
                     if (!"html".equals(format) && !"txt".equals(format) && !"svg".equals(format))
-                        throw new IOException("Unsupported format");
+                        throw new IOException(s(R.string.jgchat_unsupported_format));
                     File directory = new File(app.getCacheDir(), "juggluco-chat-exports");
-                    if (!directory.isDirectory() && !directory.mkdirs()) throw new IOException("Cannot create export cache");
+                    if (!directory.isDirectory() && !directory.mkdirs()) throw new IOException(s(R.string.jgchat_cannot_create_export_cache));
                     File[] old = directory.listFiles();
                     long cutoff = System.currentTimeMillis() - 7L * 24L * 60L * 60L * 1000L;
                     if (old != null) for (File entry : old)
@@ -247,18 +252,18 @@ public final class JugglucoChat {
                     file = File.createTempFile("Juggluco-" + ("svg".equals(format) ? "plot-" : "chat-") + date + "-", "." + format, directory);
                     try (ParcelFileDescriptor output = ParcelFileDescriptor.open(file,
                             ParcelFileDescriptor.MODE_WRITE_ONLY | ParcelFileDescriptor.MODE_TRUNCATE)) {
-                        String result = "svg".equals(format) ? nativeWritePlotExport(svg, output.getFd())
-                                : nativeWriteChatExport(format, output.getFd());
-                        if (result != null) error = result;
+                        NativeMessage result = "svg".equals(format) ? nativeWritePlotExportMessages(svg, output.getFd())
+                                : nativeWriteChatExportWithStringsMessages(format, output.getFd(), NativeMessage.exportLabels(app));
+                        if (result != null) error = result.text(app);
                     }
-                } catch (Exception | LinkageError failure) { error = "Could not prepare the export. Try again."; }
+                } catch (Exception | LinkageError failure) { error = s(R.string.jgchat_could_not_prepare_the_export_try_again); }
                 final File prepared = file;
                 final String failure = error;
                 new Handler(Looper.getMainLooper()).post(() -> {
                     preparing = false;
                     if (!failure.isEmpty() || prepared == null) {
                         if (prepared != null) prepared.delete();
-                        complete(failure.isEmpty() ? "Could not prepare the export." : failure, true);
+                        complete(failure.isEmpty() ? s(R.string.jgchat_could_not_prepare_the_export) : failure, true);
                     } else {
                         exportPath = prepared.getAbsolutePath();
                         launchPicker();
@@ -272,7 +277,7 @@ public final class JugglucoChat {
             File root = new File(context.getCacheDir(), "juggluco-chat-exports").getCanonicalFile();
             File file = new File(path).getCanonicalFile();
             if (!root.equals(file.getParentFile()) || !file.getName().startsWith("Juggluco-") || !file.isFile())
-                throw new IOException("Export snapshot is unavailable");
+                throw new IOException(context.getString(R.string.jgchat_export_snapshot_is_unavailable));
             return file;
         }
         @Override public void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -281,25 +286,25 @@ public final class JugglucoChat {
             if (resultCode != Activity.RESULT_OK) { complete("", false); return; }
             final Uri uri = data == null ? null : data.getData();
             if (uri == null || !"content".equals(uri.getScheme()) || getActivity() == null) {
-                complete("Android did not return a writable document.", true); return;
+                complete(s(R.string.jgchat_android_did_not_return_a_writable_document), true); return;
             }
             final Context app = getActivity().getApplicationContext();
             final String id = getArguments().getString("id"), file = getArguments().getString("file");
             final String snapshot = exportPath;
             writing = true;
-            Toast.makeText(app, "Saving file…", Toast.LENGTH_SHORT).show();
+            Toast.makeText(app, s(R.string.jgchat_saving_file), Toast.LENGTH_SHORT).show();
             new Thread(() -> {
                 boolean failed = false;
                 try (ParcelFileDescriptor document = app.getContentResolver().openFileDescriptor(uri, "wt")) {
-                    if (document == null) throw new IOException("No document descriptor");
-                    String error;
-                    if (snapshot.isEmpty()) error = nativeExportFile(app.getFilesDir().getAbsolutePath(), id, file, document.getFd());
+                    if (document == null) throw new IOException(s(R.string.jgchat_no_document_descriptor));
+                    NativeMessage error;
+                    if (snapshot.isEmpty()) error = nativeExportFileMessages(app.getFilesDir().getAbsolutePath(), id, file, document.getFd());
                     else try (ParcelFileDescriptor input = ParcelFileDescriptor.open(exportFile(app, snapshot), ParcelFileDescriptor.MODE_READ_ONLY)) {
-                        error = nativeCopyChatExport(input.getFd(), document.getFd());
+                        error = nativeCopyChatExportMessages(input.getFd(), document.getFd());
                     }
                     if (error != null) {
-                        try { document.closeWithError("Could not copy generated file"); } catch (IOException ignored) {}
-                        throw new IOException("Native export failed");
+                        try { document.closeWithError(s(R.string.jgchat_could_not_copy_generated_file)); } catch (IOException ignored) {}
+                        throw new IOException(s(R.string.jgchat_native_export_failed));
                     }
                     document.checkError();
                 } catch (Exception | LinkageError failure) {
@@ -309,10 +314,9 @@ public final class JugglucoChat {
                 }
                 final boolean failedCopy = failed;
                 new Handler(Looper.getMainLooper()).post(() -> complete(failedCopy
-                        ? (snapshot.isEmpty() ? "Could not save the file. The original is still in Saved files. "
-                            : "Could not save the export. Try Save chat or Save plot again. ")
-                            + "An empty or partial copy may remain at the selected location."
-                        : "File saved.", failedCopy));
+                        ? (snapshot.isEmpty() ? s(R.string.jgchat_could_not_save_the_file_the_original_is_still_in_saved_files_an_empty_or_partial_copy_)
+                            : s(R.string.jgchat_could_not_save_the_export_try_save_chat_or_save_plot_again_an_empty_or_partial_copy_ma))
+                        : s(R.string.jgchat_file_saved), failedCopy));
             }, "JugglucoChat-save").start();
         }
         void complete(String message, boolean error) {
@@ -352,8 +356,6 @@ public final class JugglucoChat {
         if (activity.isFinishing() || (Build.VERSION.SDK_INT >= 17 && activity.isDestroyed())) return;
         if (running == null) running = new RunController(activity.getApplication());
         running.hostClass = activity.getClass();
-        running.shortcutWanted = false;
-        running.removeShortcut();
         ChatWindow previous = current.get();
         if (previous != null && !previous.closed) {
             if (previous.activity == activity) {
@@ -367,7 +369,7 @@ public final class JugglucoChat {
         window.open();
     }
 
-    private interface NativeCall { String run(); }
+    private interface NativeCall { NativeMessage run(); }
 
     /** Application-owned observation and wake lease. Closing a window only
      * detaches its views; it never owns or cancels the native request. All
@@ -380,22 +382,17 @@ public final class JugglucoChat {
         long observedOperation = -1, completedOperation = -1;
         long wearObservedAt;
         boolean busy, initialized, polling, pollAgain, settingsOpen;
-        boolean shortcutWanted, reopenAfterRotation, restoreKeyboard;
+        boolean reopenAfterRotation, restoreKeyboard;
         String draft = "";
         int selectionStart, selectionEnd, scrollY;
         boolean followTail = true;
         Class<?> hostClass;
-        WeakReference<AppCompatButton> shortcut = new WeakReference<>(null);
-        WeakReference<View> shortcutContainer = new WeakReference<>(null);
-        WeakReference<ViewGroup> shortcutParent = new WeakReference<>(null);
-        WeakReference<Activity> shortcutHost = new WeakReference<>(null);
-        ViewTreeObserver.OnGlobalLayoutListener shortcutLayout;
-        ViewTreeObserver.OnWindowFocusChangeListener shortcutFocus;
 
         RunController(Application app) {
             this.app = app;
             app.registerActivityLifecycleCallbacks(this);
         }
+        String s(int id, Object... args) { return app.getString(id, args); }
         boolean visible() {
             ChatWindow chat = current.get();
             return chat != null && !chat.closed && chat.resumed && chat.initialized;
@@ -417,8 +414,8 @@ public final class JugglucoChat {
                     publishPhoneActivity();
                 }
                 boolean full = visible();
-                String raw = full ? nativePoll() : nativePollWork();
-                if (raw == null) throw new JSONException("No chat status");
+                String raw = full ? nativePollMessages() : nativePollWorkMessages();
+                if (raw == null) throw new JSONException(s(R.string.jgchat_no_chat_status));
                 JSONObject state = new JSONObject(raw);
                 busy = state.optBoolean("busy", false);
                 long operation = state.optLong("operation_id", 0);
@@ -448,17 +445,12 @@ public final class JugglucoChat {
                         }
                     }
                 }
-                AppCompatButton chip = shortcut.get();
-                if (chip != null) {
-                    chip.setText(busy ? "Chat…" : "Chat");
-                    chip.setContentDescription(busy ? "Return to chat; request in progress" : "Return to chat");
-                }
                 ChatWindow chat = current.get();
                 if (full && chat != null && !chat.closed) chat.apply(state);
             } catch (JSONException | RuntimeException | LinkageError failure) {
                 ChatWindow chat = current.get();
                 if (chat != null && !chat.closed) {
-                    chat.localError = "Could not update chat status. Check that Java and native code were both updated.";
+                    chat.localError = s(R.string.jgchat_could_not_update_chat_status_check_that_java_and_native_code_were_both_updated);
                     chat.showError();
                 }
             } finally {
@@ -546,7 +538,7 @@ public final class JugglucoChat {
                 catch (RuntimeException | LinkageError unavailable) {
                     garmin = new JSONObject().put("status", "unavailable");
                 }
-                String error = nativeSetPhoneActivity(new JSONObject().put("sensors", sensor).put("garmin", garmin).toString());
+                NativeMessage error = nativeSetPhoneActivityMessages(new JSONObject().put("sensors", sensor).put("garmin", garmin).toString());
                 if (error != null) Log.i("JugglucoChat", "Phone activity snapshot rejected");
             } catch (JSONException | RuntimeException | LinkageError unavailable) {
                 Log.i("JugglucoChat", "Phone activity snapshot unavailable");
@@ -562,7 +554,7 @@ public final class JugglucoChat {
                     nodes.put(new JSONObject().put("id", node.getId()).put("name", node.getDisplayName())
                             .put("nearby", node.isNearby()));
                 }
-                nativeSetWearNodes(new JSONObject().put("available", cached != null).put("nodes", nodes).toString());
+                nativeSetWearNodesMessages(new JSONObject().put("available", cached != null).put("nodes", nodes).toString());
             } catch (JSONException | RuntimeException | LinkageError unavailable) {
                 // Optional Android cache only. Never initiate discovery or stop
                 // a question if Google services / this cache are unavailable.
@@ -572,101 +564,15 @@ public final class JugglucoChat {
             PowerManager.WakeLock held = wakeLock; wakeLock = null;
             if (held != null) try { if (held.isHeld()) held.release(); } catch (RuntimeException ignored) {}
         }
-        void removeShortcut() {
-            ViewGroup parent = shortcutParent.get();
-            if (parent != null && parent.getViewTreeObserver().isAlive()) {
-                if (shortcutLayout != null) parent.getViewTreeObserver().removeOnGlobalLayoutListener(shortcutLayout);
-                if (shortcutFocus != null) parent.getViewTreeObserver().removeOnWindowFocusChangeListener(shortcutFocus);
-            }
-            shortcutLayout = null; shortcutFocus = null;
-            View container = shortcutContainer.get();
-            if (container != null && container.getParent() instanceof ViewGroup)
-                ((ViewGroup) container.getParent()).removeView(container);
-            shortcut.clear(); shortcutContainer.clear(); shortcutParent.clear(); shortcutHost.clear();
-        }
-        boolean shortcutEnabled() {
-            return app.getSharedPreferences("juggluco_chat", Context.MODE_PRIVATE).getBoolean("curve_shortcut", true);
-        }
-        void hideShortcut() {
-            app.getSharedPreferences("juggluco_chat", Context.MODE_PRIVATE).edit().putBoolean("curve_shortcut", false).apply();
-            shortcutWanted = false;
-            removeShortcut();
-        }
-        void updateShortcutVisibility(ViewGroup parent, View curve) {
-            View container = shortcutContainer.get();
-            if (container == null || parent == null) return;
-            boolean visible = shortcutWanted && shortcutEnabled() && curve != null
-                    && curve.getParent() == parent && curve.isShown() && parent.hasWindowFocus();
-            for (int i = 0; visible && i < parent.getChildCount(); ++i) {
-                View child = parent.getChildAt(i);
-                if (child != curve && child != container && child.getVisibility() == View.VISIBLE) visible = false;
-            }
-            int visibility = visible ? View.VISIBLE : View.GONE;
-            if (container.getVisibility() != visibility) container.setVisibility(visibility);
-        }
-        void showShortcut(Activity activity) {
-            if (!shortcutWanted || !shortcutEnabled() || activity.isFinishing() || activity.isDestroyed()) return;
-            removeShortcut();
-            View content = activity.findViewById(android.R.id.content);
-            if (!(content instanceof FrameLayout) || !(activity instanceof MainActivity)) return;
-            FrameLayout parent = (FrameLayout) content;
-            View curve = ((MainActivity) activity).curve;
-            if (curve == null || curve.getParent() != parent) return;
-            Context theme = new AlertDialog.Builder(activity).getContext();
-            LinearLayout container = new LinearLayout(theme);
-            container.setGravity(Gravity.CENTER_VERTICAL);
-            AppCompatButton chip = new AppCompatButton(new AlertDialog.Builder(activity).getContext());
-            chip.setAllCaps(false);
-            chip.setText(busy ? "Chat…" : "Chat");
-            chip.setContentDescription("Return to chat. Hold to hide this shortcut.");
-            int gap = Math.round(8 * activity.getResources().getDisplayMetrics().density);
-            AppCompatButton hide = new AppCompatButton(theme);
-            hide.setText("×"); hide.setAllCaps(false);
-            hide.setContentDescription("Hide Chat shortcut. Enable it again in chat settings.");
-            hide.setMinWidth(0); hide.setMinimumWidth(0); hide.setPadding(0, 0, 0, 0);
-            container.addView(chip);
-            container.addView(hide, new LinearLayout.LayoutParams(gap * 6, ViewGroup.LayoutParams.WRAP_CONTENT));
-            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM | Gravity.END);
-            params.setMarginEnd(gap); params.bottomMargin = gap;
-            // Insert beside the curve, below any subsequently opened Android
-            // panels. Also hide on visible sibling panels or another window.
-            container.setVisibility(View.GONE);
-            parent.addView(container, parent.indexOfChild(curve) + 1, params);
-            ViewCompat.setOnApplyWindowInsetsListener(container, (view, insets) -> {
-                Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
-                FrameLayout.LayoutParams position = (FrameLayout.LayoutParams) view.getLayoutParams();
-                position.setMarginEnd(gap + Math.max(bars.left, bars.right));
-                position.bottomMargin = gap + bars.bottom;
-                view.setLayoutParams(position);
-                return insets;
-            });
-            final WeakReference<Activity> owner = new WeakReference<>(activity);
-            chip.setOnClickListener(v -> { Activity target = owner.get(); if (target != null) show(target); });
-            chip.setOnLongClickListener(v -> { hideShortcut(); return true; });
-            hide.setOnClickListener(v -> hideShortcut());
-            shortcut = new WeakReference<>(chip); shortcutHost = owner;
-            shortcutContainer = new WeakReference<>(container); shortcutParent = new WeakReference<>(parent);
-            final WeakReference<View> curveRef = new WeakReference<>(curve);
-            final WeakReference<ViewGroup> parentRef = new WeakReference<>(parent);
-            shortcutLayout = () -> updateShortcutVisibility(parentRef.get(), curveRef.get());
-            shortcutFocus = focused -> updateShortcutVisibility(parentRef.get(), curveRef.get());
-            parent.getViewTreeObserver().addOnGlobalLayoutListener(shortcutLayout);
-            parent.getViewTreeObserver().addOnWindowFocusChangeListener(shortcutFocus);
-            updateShortcutVisibility(parent, curve);
-            ViewCompat.requestApplyInsets(container);
-        }
         @Override public void onActivityResumed(Activity activity) {
             if (activity.getClass() != hostClass) return;
             if (reopenAfterRotation) {
                 reopenAfterRotation = false;
                 handler.post(() -> show(activity));
-            } else if (shortcutWanted && current.get() == null) showShortcut(activity);
+            }
             refresh();
         }
-        @Override public void onActivityDestroyed(Activity activity) {
-            if (shortcutHost.get() == activity) removeShortcut();
-        }
+        @Override public void onActivityDestroyed(Activity activity) {}
         @Override public void onActivityCreated(Activity a, Bundle state) {}
         @Override public void onActivityStarted(Activity a) {}
         @Override public void onActivityPaused(Activity a) {}
@@ -674,11 +580,38 @@ public final class JugglucoChat {
         @Override public void onActivitySaveInstanceState(Activity a, Bundle state) {}
     }
 
-    static String answerHeading(String modelName, String modelId) {
+    static String answerHeading(String modelName, String modelId, String fallback) {
         if (modelName != null && !modelName.trim().isEmpty()) return modelName.trim();
         if (modelId != null && !modelId.trim().isEmpty()) return modelId.trim();
         // Earlier releases did not record which model answered a message.
-        return "ChatGPT";
+        return fallback;
+    }
+
+    /** Position in physical screen coordinates, including the keyboard area. */
+    static int keyboardButtonTop(int keyboardTop, int height, boolean portrait, int top, int bottom) {
+        return Math.max(top, Math.min(keyboardTop - (portrait ? 0 : height), bottom - height));
+    }
+
+    /** Horizontal popup offset in its parent window; bounds are screen coordinates. */
+    static int keyboardButtonLeft(int width, boolean rtl, int left, int right, int margin, int parentLeft) {
+        int lastLeft = Math.max(left, right - width);
+        int wanted = rtl ? left + margin : lastLeft - margin;
+        return Math.max(left, Math.min(wanted, lastLeft)) - parentLeft;
+    }
+
+    static int reasoningAbbreviation(String effort) {
+        if (effort == null) return 0; // Older answers did not record the level.
+        switch (effort) {
+            case "": case "default": return R.string.jgchat_reasoning_default_short;
+            case "none": return R.string.jgchat_reasoning_none_short;
+            case "minimal": return R.string.jgchat_reasoning_minimal_short;
+            case "low": return R.string.jgchat_reasoning_low_short;
+            case "medium": return R.string.jgchat_reasoning_medium_short;
+            case "high": return R.string.jgchat_reasoning_high_short;
+            case "xhigh": return R.string.jgchat_reasoning_xhigh_short;
+            case "max": return R.string.jgchat_reasoning_max_short;
+            default: return 0;
+        }
     }
 
     /** Small, non-HTML formatter. Offsets map original UTF-16 positions to the
@@ -799,12 +732,15 @@ public final class JugglucoChat {
         final AppCompatDialog dialog;
         final LinearLayout root;
         final FrameLayout chatSurface;
-        final AppCompatButton keyboardDone;
+        final AppCompatButton keyboardHide;
+        final PopupWindow keyboardPopup;
         final LinearLayout chatPanel;
-        final LinearLayout modelPanel;
         final LinearLayout progressRow;
-        final NestedScrollView settingsScroll;
+        final Layout settingsLayout;
+        final View[] modelViews, loginViews;
+        final TextView settingsStatus, settingsError;
         final AppCompatButton settings;
+        final AppCompatButton activityButton;
         final AppCompatButton closeButton;
         final int backgroundColor;
         final AppCompatTextView status;
@@ -812,20 +748,23 @@ public final class JugglucoChat {
         final ProgressBar thinking;
         final AppCompatTextView error;
         final AppCompatTextView transcript;
-        final AppCompatTextView code;
-        final AppCompatTextView loginLink;
+        final TextView code;
+        final TextView loginLink;
         final AppCompatEditText question;
-        final AppCompatButton signIn;
-        final AppCompatButton signOut;
-        final AppCompatButton newChat;
+        final Button signIn;
+        final Button signOut;
+        final Button newChat;
         final AppCompatButton send;
-        final AppCompatButton chooseModel;
-        final AppCompatButton chooseReasoning;
-        final AppCompatCheckBox internet;
-        final AppCompatButton savedFiles;
-        final AppCompatButton copyCode;
-        final AppCompatButton openBrowser;
-        final LinearLayout loginPanel;
+        final Button chooseModel;
+        final Button chooseReasoning;
+        final CheckDirectionBox internet;
+        final Button savedFiles;
+        final Button saveChat;
+        final Button shareChat;
+        final Button clearAnalysis;
+        final Button stopRequest;
+        final Button copyCode;
+        final Button openBrowser;
         final NestedScrollView transcriptScroll;
         final List<Model> models = new ArrayList<>();
         AlertDialog childDialog;
@@ -838,6 +777,9 @@ public final class JugglucoChat {
         boolean busy;
         boolean loggedIn;
         boolean settingsOpen;
+        boolean helpOpen;
+        boolean opened, settingsAttached;
+        int settingsBackDepth;
         boolean haveAccountSnapshot;
         boolean modelsRequested;
         String localError = "";
@@ -882,15 +824,17 @@ public final class JugglucoChat {
             root.setBackgroundColor(backgroundColor);
             root.setPadding(dp(8), 0, dp(8), 0);
             root.setFocusableInTouchMode(true);
-            settings = button("More");
-            closeButton = button("Close");
+            settings = button(s(R.string.jgchat_more));
+            activityButton = button(s(R.string.jgchat_activity));
+            closeButton = button(s(R.string.jgchat_close));
             compactFooterButton(settings);
+            compactFooterButton(activityButton);
             compactFooterButton(closeButton);
 
             // No title or toolbar above the editor. It grows with the draft,
             // consuming the transcript's space before it starts scrolling.
             question = new AppCompatEditText(ui);
-            question.setHint("Ask about your Juggluco data");
+            question.setHint(s(R.string.jgchat_ask_about_your_juggluco_data));
             question.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
                     | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
             question.setImeOptions(EditorInfo.IME_ACTION_NONE | EditorInfo.IME_FLAG_NO_ENTER_ACTION
@@ -900,7 +844,7 @@ public final class JugglucoChat {
             question.setGravity(Gravity.TOP | Gravity.START);
             question.setText(running.draft);
             restoreSelection();
-            send = button("Send");
+            send = button(s(R.string.jgchat_send));
             final int editorStart = question.getPaddingStart(), editorTop = question.getPaddingTop();
             final int editorEnd = question.getPaddingEnd(), editorBottom = question.getPaddingBottom();
             FrameLayout composer = new FrameLayout(ui) {
@@ -939,69 +883,76 @@ public final class JugglucoChat {
                     ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
             root.addView(chatPanel, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
 
-            // Account/model information occupies its own page. It is not part
-            // of the logged-in chat's layout or scroll position.
-            LinearLayout form = column();
-            AppCompatTextView notice = text("Questions and requested Juggluco data are sent to OpenAI. "
-                    + "This chat uses your Codex account and its usage limits; it is separate from the ChatGPT app.");
-            notice.setTextSize(14);
-            form.addView(notice, fullWidth());
-
-            signIn = button("Sign in");
-            signOut = button("Sign out");
-            newChat = button("New chat");
-            form.addView(row(signIn, signOut), fullWidth());
-            form.addView(newChat, fullWidth());
-            savedFiles = button("Saved files");
-            form.addView(savedFiles, fullWidth());
-
-            modelPanel = column();
-            modelPanel.addView(text("Model"), fullWidth());
-            chooseModel = button("Select a model");
-            modelPanel.addView(chooseModel, fullWidth());
-            chooseReasoning = button("Reasoning: Server default");
-            modelPanel.addView(chooseReasoning, fullWidth());
-            AppCompatTextView reasoningHint = text("High is selected initially when supported. "
-                    + "More reasoning can take longer and use more of your account limits.");
-            reasoningHint.setTextSize(14);
-            modelPanel.addView(reasoningHint, fullWidth());
-            internet = new AppCompatCheckBox(ui);
-            internet.setText("Internet search");
-            internet.setChecked(prefs.getBoolean("internet_search", true));
+            // Use the Activity context and Juggluco's normal widgets/theme.
+            TextView settingsTitle = util.getlabel(activity, R.string.jgchat_settings);
+            signIn = util.getbutton(activity, R.string.jgchat_sign_in);
+            signOut = util.getbutton(activity, R.string.jgchat_sign_out);
+            newChat = util.getbutton(activity, R.string.jgchat_new_chat);
+            savedFiles = util.getbutton(activity, R.string.jgchat_saved_files);
+            saveChat = util.getbutton(activity, R.string.jgchat_save_chat_a8796cea);
+            shareChat = util.getbutton(activity, R.string.jgchat_share_chat);
+            clearAnalysis = util.getbutton(activity, R.string.jgchat_clear_analysis_memory);
+            TextView modelLabel = util.getlabel(activity, R.string.jgchat_model);
+            chooseModel = util.getbutton(activity, R.string.jgchat_select_a_model);
+            chooseReasoning = util.getbutton(activity, R.string.jgchat_reasoning_server_default);
+            internet = util.getcheckbox(activity, R.string.jgchat_internet_search, prefs.getBoolean("internet_search", true));
             internet.setOnCheckedChangeListener((button, checked) -> prefs.edit().putBoolean("internet_search", checked).apply());
-            modelPanel.addView(internet, fullWidth());
-            AppCompatCheckBox curveShortcut = new AppCompatCheckBox(ui);
-            curveShortcut.setText("Show Chat shortcut on the main curve");
-            curveShortcut.setChecked(running.shortcutEnabled());
-            curveShortcut.setOnCheckedChangeListener((button, checked) -> {
-                prefs.edit().putBoolean("curve_shortcut", checked).apply();
-                if (!checked) { running.shortcutWanted = false; running.removeShortcut(); }
-            });
-            modelPanel.addView(curveShortcut, fullWidth());
-            form.addView(modelPanel, fullWidth());
-
-            loginPanel = column();
-            loginPanel.addView(text("Enter this one-time code on OpenAI’s sign-in page:"), fullWidth());
-            code = text("");
+            modelViews = new View[]{modelLabel, chooseModel, chooseReasoning, internet};
+            TextView loginCodeLabel = util.getlabel(activity, R.string.jgchat_sign_in_code);
+            code = util.getlabel(activity, "");
             code.setTextSize(22);
             code.setTextIsSelectable(true);
-            loginPanel.addView(code, fullWidth());
-            loginLink = text("");
+            loginLink = util.getlabel(activity, "");
             loginLink.setTextIsSelectable(true);
-            loginPanel.addView(loginLink, fullWidth());
-            copyCode = button("Copy code");
-            openBrowser = button("Open sign-in page");
-            loginPanel.addView(row(copyCode, openBrowser), fullWidth());
-            loginPanel.setVisibility(View.GONE);
-            form.addView(loginPanel, fullWidth());
+            loginLink.setMaxLines(2);
+            loginLink.setEllipsize(TextUtils.TruncateAt.END);
+            copyCode = util.getbutton(activity, R.string.jgchat_copy_code);
+            openBrowser = util.getbutton(activity, R.string.jgchat_open_sign_in_page);
+            loginViews = new View[]{loginCodeLabel, code, loginLink, copyCode, openBrowser};
+            stopRequest = util.getbutton(activity, R.string.jgchat_stop_request);
+            Button helpbutton = util.getbutton(activity, R.string.helpname);
+            Button settingsActivity = util.getbutton(activity, R.string.jgchat_activity);
+            Button settingsClose = util.getbutton(activity, R.string.jgchat_close);
+            settingsStatus = util.getlabel(activity, "");
+            settingsStatus.setMaxLines(1);
+            settingsStatus.setEllipsize(TextUtils.TruncateAt.END);
+            settingsError = util.getlabel(activity, "");
+            settingsError.setMaxLines(3);
+            settingsError.setTextIsSelectable(true);
+            settingsError.setVisibility(View.GONE);
 
-            settingsScroll = new NestedScrollView(ui);
-            settingsScroll.setFillViewport(true);
-            settingsScroll.addView(form, new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            root.addView(settingsScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+            settingsLayout = new Layout(activity,
+                    new View[]{settingsTitle, signIn, signOut},
+                    new View[]{modelLabel, chooseModel, chooseReasoning, internet},
+                    new View[]{newChat, savedFiles, saveChat, shareChat},
+                    new View[]{clearAnalysis, stopRequest},
+                    new View[]{loginCodeLabel, code, copyCode, openBrowser},
+                    new View[]{loginLink},
+                    new View[]{settingsStatus, settingsError},
+                    new View[]{helpbutton, settingsActivity, settingsClose}
+            ).portraitLayout(
+                    new View[]{settingsTitle},
+                    new View[]{modelLabel, chooseModel},
+                    new View[]{chooseReasoning},
+                    new View[]{internet},
+                    new View[]{saveChat, shareChat},
+                    new View[]{newChat, savedFiles},
+                    new View[]{clearAnalysis},
+                    new View[]{stopRequest},
+                    new View[]{signIn, signOut},
+                    new View[]{loginCodeLabel, code},
+                    new View[]{copyCode, openBrowser},
+                    new View[]{loginLink},
+                    new View[]{settingsStatus},
+                    new View[]{settingsError},
+                    new View[]{helpbutton, settingsActivity, settingsClose});
+            settingsLayout.setBackgroundColor(Applic.backgroundcolor);
+            settingsLayout.systembarPadding((left, top, right, bottom) -> new int[]{left + dp(8), top, right + dp(8), bottom});
+            helpbutton.setOnClickListener(v -> showHelp());
+            settingsActivity.setOnClickListener(v -> showActivity());
+            settingsClose.setOnClickListener(v -> MainActivity.doonback());
 
-            status = text("Opening chat…");
+            status = text(s(R.string.jgchat_opening_chat));
             status.setMaxLines(1);
             status.setEllipsize(TextUtils.TruncateAt.END);
             thinking = new ProgressBar(ui);
@@ -1016,7 +967,7 @@ public final class JugglucoChat {
             progressRow = column();
             progressRow.addView(progressButtons, fullWidth());
             progressRow.setOnClickListener(v -> showActivity());
-            progressRow.setContentDescription("Thinking progress. Tap for activity details.");
+            progressRow.setContentDescription(s(R.string.jgchat_thinking_progress_tap_for_activity_details));
             root.addView(progressRow, fullWidth());
             error = text("");
             error.setTypeface(error.getTypeface(), Typeface.BOLD);
@@ -1025,63 +976,76 @@ public final class JugglucoChat {
             error.setVerticalScrollBarEnabled(true);
             error.setVisibility(View.GONE);
             root.addView(error, fullWidth());
-            root.addView(row(settings, closeButton), fullWidth());
+            root.addView(row(settings, activityButton, closeButton), fullWidth());
 
-            // The chat retains its full size behind the keyboard. Only Done
-            // follows the IME edge; it does not consume transcript height.
+            // A separate non-focusable popup can sit over the keyboard's top
+            // row in portrait, without taking focus from the editor or
+            // reserving space in the transcript.
             chatSurface = new FrameLayout(ui);
             chatSurface.addView(root, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            keyboardDone = button("Done");
-            keyboardDone.setContentDescription("Done: hide keyboard");
-            keyboardDone.setMinHeight(dp(40));
-            keyboardDone.setMinimumHeight(0);
-            keyboardDone.setPadding(dp(16), dp(4), dp(16), dp(4));
-            keyboardDone.setIncludeFontPadding(false);
-            keyboardDone.setFocusable(false);
-            GradientDrawable doneBackground = new GradientDrawable();
-            doneBackground.setColor(backgroundColor);
-            doneBackground.setCornerRadius(dp(20));
-            doneBackground.setStroke(dp(1), keyboardDone.getCurrentTextColor());
-            keyboardDone.setBackground(doneBackground);
-            keyboardDone.setElevation(dp(8));
-            keyboardDone.setVisibility(View.GONE);
-            keyboardDone.setOnClickListener(v -> { hideKeyboard(); root.requestFocus(); });
-            chatSurface.addView(keyboardDone, new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
-                    Gravity.TOP | Gravity.LEFT));
+            keyboardHide = button(s(R.string.jgchat_hide));
+            keyboardHide.setContentDescription(s(R.string.jgchat_hide_keyboard));
+            keyboardHide.setMinHeight(dp(40));
+            keyboardHide.setMinimumHeight(0);
+            keyboardHide.setPadding(dp(16), dp(4), dp(16), dp(4));
+            keyboardHide.setIncludeFontPadding(false);
+            keyboardHide.setFocusable(false);
+            GradientDrawable hideBackground = new GradientDrawable();
+            hideBackground.setColor(backgroundColor);
+            hideBackground.setCornerRadius(dp(20));
+            hideBackground.setStroke(dp(1), keyboardHide.getCurrentTextColor());
+            keyboardHide.setBackground(hideBackground);
+            keyboardHide.setElevation(dp(8));
+            keyboardHide.setOnClickListener(v -> { hideKeyboard(); root.requestFocus(); });
+            keyboardPopup = new PopupWindow(keyboardHide,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, false);
+            keyboardPopup.setInputMethodMode(PopupWindow.INPUT_METHOD_NOT_NEEDED);
+            keyboardPopup.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+            keyboardPopup.setOutsideTouchable(false);
+            keyboardPopup.setClippingEnabled(false);
+            keyboardPopup.setAnimationStyle(0);
+            if (Build.VERSION.SDK_INT >= 22) keyboardPopup.setAttachedInDecor(true);
+            if (Build.VERSION.SDK_INT >= 29) {
+                // Keep the popup relative to the dialog. LAYOUT_IN_SCREEN
+                // can use a separate navigation-bar-inset frame, shifting
+                // screen-coordinate x positions off the right edge when
+                // navigation buttons are on the left.
+                keyboardPopup.setIsLaidOutInScreen(false);
+                keyboardPopup.setTouchModal(false);
+            }
             dialog.setContentView(chatSurface, new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             dialog.setCanceledOnTouchOutside(false);
             dialog.setOnDismissListener(ignored -> close());
             dialog.getOnBackPressedDispatcher().addCallback(dialog, new OnBackPressedCallback(true) {
                 @Override public void handleOnBackPressed() {
-                    boolean loginActive = busy && (!loginUrl.isEmpty() || !userCode.isEmpty());
-                    if (loggedIn && settingsOpen && !loginActive) showSettings(false);
-                    else dialogClose();
+                    dialogClose();
                 }
             });
             configureWindow();
             root.requestFocus();
-            settings.setOnClickListener(v -> showMore());
-            closeButton.setOnClickListener(v -> {
-                if (loggedIn && settingsOpen) showSettings(false);
-                else dialogClose();
-            });
+            settings.setOnClickListener(v -> showSettings(true));
+            activityButton.setOnClickListener(v -> showActivity());
+            closeButton.setOnClickListener(v -> dialogClose());
 
             signIn.setOnClickListener(v -> {
                 hideKeyboard();
                 modelsRequested = false;
-                invoke(JugglucoChat::nativeStartLogin);
+                invoke(JugglucoChat::nativeStartLoginMessages);
             });
             signOut.setOnClickListener(v -> {
                 modelsRequested = false;
-                if (invoke(JugglucoChat::nativeLogout)) question.setText("");
+                if (invoke(JugglucoChat::nativeLogoutMessages)) question.setText("");
             });
             newChat.setOnClickListener(v -> confirmNewChat());
             chooseModel.setOnClickListener(v -> showModels());
             chooseReasoning.setOnClickListener(v -> showReasoning());
             savedFiles.setOnClickListener(v -> showSavedFiles());
+            saveChat.setOnClickListener(v -> chooseChatExport(false));
+            shareChat.setOnClickListener(v -> chooseChatExport(true));
+            clearAnalysis.setOnClickListener(v -> confirmClearAnalysis());
+            stopRequest.setOnClickListener(v -> { running.releaseWake(); invoke(JugglucoChat::nativeCancelMessages); });
             send.setOnClickListener(v -> sendQuestion());
             openBrowser.setOnClickListener(v -> openLogin());
             copyCode.setOnClickListener(v -> copyLoginCode());
@@ -1094,6 +1058,7 @@ public final class JugglucoChat {
             updateControls();
         }
 
+        String s(int id, Object... args) { return ui.getString(id, args); }
         int dp(int value) { return Math.round(value * activity.getResources().getDisplayMetrics().density); }
         LinearLayout.LayoutParams fullWidth() {
             return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -1133,15 +1098,14 @@ public final class JugglucoChat {
         }
 
         void open() {
-            dialog.show();
-            resizeDialog();
+            opened = true;
             application.registerActivityLifecycleCallbacks(this);
             application.registerComponentCallbacks(this);
             try {
-                String result = nativeInitWithFiles(activity.getNoBackupFilesDir().getAbsolutePath() + "/juggluco-chat",
+                NativeMessage result = nativeInitWithFilesMessages(activity.getNoBackupFilesDir().getAbsolutePath() + "/juggluco-chat",
                         activity.getFilesDir().getAbsolutePath());
                 initialized = result == null;
-                if (!initialized) localError = result;
+                if (!initialized) localError = result.text(ui);
             } catch (RuntimeException | LinkageError failure) {
                 localError = message(failure);
             }
@@ -1158,10 +1122,10 @@ public final class JugglucoChat {
                 }
             }
             else {
-                status.setText("Chat could not be opened.");
+                status.setText(s(R.string.jgchat_chat_could_not_be_opened));
                 showError();
-                updateControls();
             }
+            updateControls();
         }
 
         void refresh() {
@@ -1199,16 +1163,16 @@ public final class JugglucoChat {
                 root.requestFocus();
             }
             haveAccountSnapshot = true;
-            serverError = snapshot.optString("error", "");
-            String description = snapshot.optString("status", "");
-            status.setText(description.isEmpty() ? (loggedIn ? "Signed in" : "Sign in to begin") : description);
-            elapsed.setText(duration(snapshot.optLong("elapsed_ms", 0)) + " elapsed");
+            serverError = NativeMessage.text(ui, snapshot.optJSONObject("error"));
+            String description = NativeMessage.text(ui, snapshot.optJSONObject("status"));
+            status.setText(description.isEmpty() ? (loggedIn ? s(R.string.jgchat_signed_in) : s(R.string.jgchat_sign_in_to_begin)) : description);
+            elapsed.setText(s(R.string.jgchat_elapsed, duration(snapshot.optLong("elapsed_ms", 0))));
             StringBuilder activityLines = new StringBuilder();
             JSONArray events = snapshot.optJSONArray("activity");
             if (events != null) for (int i = 0; i < events.length(); ++i) {
                 JSONObject entry = events.optJSONObject(i);
                 if (entry != null) activityLines.append(duration(entry.optLong("elapsed_ms", 0)))
-                        .append("  ").append(entry.optString("text", "")).append("\n\n");
+                        .append("  ").append(NativeMessage.text(ui, entry.optJSONObject("message"))).append("\n\n");
             }
             activityText = activityLines.length() == 0 ? description : activityLines.toString();
             if (activityDetails != null) activityDetails.setText(activityText);
@@ -1216,8 +1180,6 @@ public final class JugglucoChat {
             userCode = snapshot.optString("user_code", "");
             code.setText(userCode);
             loginLink.setText(loginUrl);
-            loginPanel.setVisibility(busy && (!loginUrl.isEmpty() || !userCode.isEmpty())
-                    ? View.VISIBLE : View.GONE);
             JSONArray available = snapshot.optJSONArray("models");
             updateModels(available == null ? new JSONArray() : available);
             JSONArray messages = snapshot.optJSONArray("messages");
@@ -1241,12 +1203,12 @@ public final class JugglucoChat {
                         openSavedFile(file.getString("id"), file.getString("file"));
                     }
                 } catch (JSONException | RuntimeException | LinkageError failure) {
-                    localError = "Could not open saved page: " + message(failure); showError();
+                    localError = s(R.string.jgchat_saved_page_error, message(failure)); showError();
                 }
             }
             if (resumed && loggedIn && !busy && models.isEmpty() && !modelsRequested) {
                 modelsRequested = true;
-                invoke(JugglucoChat::nativeLoadModels);
+                invoke(JugglucoChat::nativeLoadModelsMessages);
             }
         }
 
@@ -1292,8 +1254,14 @@ public final class JugglucoChat {
                 if (!"user".equals(role) && !"assistant".equals(role)) continue;
                 if (text.length() > 0) text.append("\n\n");
                 int start = text.length();
-                text.append("user".equals(role) ? "You" : answerHeading(
-                        item.optString("model_name", ""), item.optString("model_id", "")));
+                String heading = "user".equals(role) ? s(R.string.jgchat_you) : answerHeading(
+                        item.optString("model_name", ""), item.optString("model_id", ""), s(R.string.jgchat_chatgpt));
+                if ("assistant".equals(role)) {
+                    int level = reasoningAbbreviation(item.has("reasoning_effort") && !item.isNull("reasoning_effort")
+                            ? item.optString("reasoning_effort", null) : null);
+                    if (level != 0) heading = s(R.string.jgchat_answer_heading, heading, s(level));
+                }
+                text.append(heading);
                 text.setSpan(new StyleSpan(Typeface.BOLD), start, text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 text.append("\n");
                 final int bodyStart = text.length();
@@ -1327,7 +1295,7 @@ public final class JugglucoChat {
                     final int messageIndex = i, plotIndex = p;
                     text.append("\n\n");
                     int linkStart = text.length();
-                    text.append("Open plot: ").append(plot.optString("caption", "Plot"));
+                    text.append(s(R.string.jgchat_open_plot_value, plot.optString("caption", s(R.string.jgchat_plot))));
                     text.setSpan(new ClickableSpan() {
                         @Override public void onClick(View view) { showPlot(messageIndex, plotIndex); }
                         @Override public void updateDrawState(TextPaint paint) {
@@ -1343,25 +1311,25 @@ public final class JugglucoChat {
                     String id = bundle.optString("id", ""), entry = bundle.optString("entrypoint", "jg-files.html");
                     text.append("\n\n");
                     int fileStart = text.length();
-                    text.append("Open in Chrome: ").append(bundle.optString("title", "Saved files"));
+                    text.append(s(R.string.jgchat_open_in_chrome_value, bundle.optString("title", s(R.string.jgchat_saved_files))));
                     link(text, fileStart, text.length(), () -> openSavedFile(id, entry));
                     text.append("\n"); fileStart = text.length();
-                    text.append("View / download files");
+                    text.append(s(R.string.jgchat_view_download_files));
                     link(text, fileStart, text.length(), () -> openSavedFile(id, "jg-files.html"));
                     text.append("\n"); fileStart = text.length();
-                    text.append("Save as…");
+                    text.append(s(R.string.jgchat_save_as));
                     link(text, fileStart, text.length(), () -> showExportFiles(bundle));
                 }
             }
             if (!pending.isEmpty()) {
                 if (text.length() > 0) text.append("\n\n");
                 int start = text.length();
-                text.append("You");
+                text.append(s(R.string.jgchat_you));
                 text.setSpan(new StyleSpan(Typeface.BOLD), start, text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 text.append("\n").append(pending).append("\n\n");
-                text.append(busy ? "Answer in progress…" : "No answer was completed. Send the question again to retry.");
+                text.append(busy ? s(R.string.jgchat_answer_in_progress) : s(R.string.jgchat_no_answer_was_completed_send_the_question_again_to_retry));
             }
-            if (text.length() == 0) text.append("Your conversation will appear here.");
+            if (text.length() == 0) text.append(s(R.string.jgchat_your_conversation_will_appear_here));
             transcript.setText(text);
             handler.post(() -> {
                 if (!closed) {
@@ -1423,56 +1391,56 @@ public final class JugglucoChat {
                 catch (ActivityNotFoundException unavailable) { activity.startActivity(intent); }
             } catch (RuntimeException failure) {
                 // Do not include the URL: local URLs can contain an API secret.
-                localError = "Could not open a browser."; showError();
+                localError = s(R.string.jgchat_could_not_open_a_browser); showError();
             }
         }
         void openSavedFile(String id, String name) {
             try {
-                JSONObject result = new JSONObject(nativeFileUrl(id, name));
-                if (result.has("error")) { localError = result.getString("error"); showError(); return; }
+                JSONObject result = new JSONObject(nativeFileUrlMessages(id, name));
+                if (result.has("error")) { localError = NativeMessage.text(ui, result.optJSONObject("error")); showError(); return; }
                 String url = result.getString("url");
-                if (!"127.0.0.1".equals(Uri.parse(url).getHost())) throw new JSONException("Invalid local file URL");
+                if (!"127.0.0.1".equals(Uri.parse(url).getHost())) throw new JSONException(s(R.string.jgchat_invalid_local_file_url));
                 openWebUrl(url);
             } catch (JSONException | RuntimeException | LinkageError failure) {
-                localError = "Could not open the saved file."; showError();
+                localError = s(R.string.jgchat_could_not_open_the_saved_file); showError();
             }
         }
         void showSavedFiles() {
             dismissChild();
             try {
-                JSONObject result = new JSONObject(nativeListFiles());
-                if (result.has("error")) { localError = result.getString("error"); showError(); return; }
+                JSONObject result = new JSONObject(nativeListFilesMessages());
+                if (result.has("error")) { localError = NativeMessage.text(ui, result.optJSONObject("error")); showError(); return; }
                 JSONArray files = result.getJSONArray("files");
                 if (files.length() == 0) {
-                    childDialog = new AlertDialog.Builder(ui).setTitle("Saved files")
-                            .setMessage("Ask for an HTML/JavaScript page, CSV, JSON or text file. Saved files remain available after New chat or Sign out.")
-                            .setPositiveButton("Close", null).create();
+                    childDialog = new AlertDialog.Builder(ui).setTitle(s(R.string.jgchat_saved_files))
+                            .setMessage(s(R.string.jgchat_ask_for_an_html_javascript_page_csv_json_or_text_file_saved_files_remain_available_aft))
+                            .setPositiveButton(s(R.string.jgchat_close), null).create();
                 } else {
                     String[] labels = new String[files.length()];
                     for (int i = 0; i < labels.length; ++i) {
                         JSONObject bundle = files.getJSONObject(i);
                         String id = bundle.optString("id", "");
-                        labels[i] = bundle.optString("title", "Files") + " · " + id.substring(0, Math.min(6, id.length()));
+                        labels[i] = bundle.optString("title", s(R.string.jgchat_files)) + " · " + id.substring(0, Math.min(6, id.length()));
                     }
-                    childDialog = new AlertDialog.Builder(ui).setTitle("Saved files")
+                    childDialog = new AlertDialog.Builder(ui).setTitle(s(R.string.jgchat_saved_files))
                             .setItems(labels, (dialog, which) -> {
                                 JSONObject bundle = files.optJSONObject(which);
                                 if (bundle != null) showFileActions(bundle);
-                            }).setNegativeButton("Close", null).create();
+                            }).setNegativeButton(s(R.string.jgchat_close), null).create();
                 }
                 childDialog.show();
             } catch (JSONException | RuntimeException | LinkageError failure) {
-                localError = "Could not list saved files."; showError();
+                localError = s(R.string.jgchat_could_not_list_saved_files); showError();
             }
         }
         void showFileActions(JSONObject bundle) {
             dismissChild();
             final String id = bundle.optString("id", "");
-            childDialog = new AlertDialog.Builder(ui).setTitle(bundle.optString("title", "Files"))
-                    .setMessage("Save as lets you choose a file and its destination in Android. Open uses Juggluco's web server. Delete saved folders under Web server → Upload web pages → chatgpt.")
-                    .setPositiveButton("Open", (d, w) -> openSavedFile(id, bundle.optString("entrypoint", "jg-files.html")))
-                    .setNeutralButton("Save as…", (d, w) -> showExportFiles(bundle))
-                    .setNegativeButton("Close", null).create();
+            childDialog = new AlertDialog.Builder(ui).setTitle(bundle.optString("title", s(R.string.jgchat_files)))
+                    .setMessage(s(R.string.jgchat_save_as_lets_you_choose_a_file_and_its_destination_in_android_open_uses_juggluco_s_web))
+                    .setPositiveButton(s(R.string.jgchat_open), (d, w) -> openSavedFile(id, bundle.optString("entrypoint", "jg-files.html")))
+                    .setNeutralButton(s(R.string.jgchat_save_as), (d, w) -> showExportFiles(bundle))
+                    .setNegativeButton(s(R.string.jgchat_close), null).create();
             childDialog.show();
         }
 
@@ -1490,12 +1458,12 @@ public final class JugglucoChat {
                 }
             }
             if (hasHtml) names.add("jg-api.js");
-            if (names.isEmpty()) { localError = "No generated files are available."; showError(); return; }
+            if (names.isEmpty()) { localError = s(R.string.jgchat_no_generated_files_are_available); showError(); return; }
             final String id = bundle.optString("id", "");
             if (names.size() == 1) { saveDocument(id, names.get(0)); return; }
-            childDialog = new AlertDialog.Builder(ui).setTitle("Save a file as…")
+            childDialog = new AlertDialog.Builder(ui).setTitle(s(R.string.jgchat_save_a_file_as))
                     .setItems(names.toArray(new String[0]), (ignored, which) -> saveDocument(id, names.get(which)))
-                    .setNegativeButton("Cancel", null).create();
+                    .setNegativeButton(s(R.string.jgchat_cancel), null).create();
             childDialog.show();
         }
         @SuppressWarnings("deprecation")
@@ -1505,7 +1473,7 @@ public final class JugglucoChat {
             try {
                 FragmentManager manager = activity.getFragmentManager();
                 if (manager.findFragmentByTag(SaveFileFragment.TAG) != null) {
-                    localError = "A file save is already in progress."; showError(); return;
+                    localError = s(R.string.jgchat_file_save_in_progress); showError(); return;
                 }
                 SaveFileFragment fragment = new SaveFileFragment();
                 Bundle args = new Bundle(); args.putString("id", id); args.putString("file", name);
@@ -1514,7 +1482,7 @@ public final class JugglucoChat {
                 manager.executePendingTransactions();
                 localError = ""; showError();
             } catch (RuntimeException failure) {
-                localError = "Could not start Save as. Return to the chat and try again."; showError();
+                localError = s(R.string.jgchat_could_not_start_save_as_return_to_the_chat_and_try_again); showError();
             }
         }
 
@@ -1522,17 +1490,18 @@ public final class JugglucoChat {
             if (closed) return;
             boolean loginActive = busy && (!loginUrl.isEmpty() || !userCode.isEmpty());
             boolean accountPage = !loggedIn || settingsOpen || loginActive;
-            chatPanel.setVisibility(accountPage ? View.GONE : View.VISIBLE);
-            settingsScroll.setVisibility(accountPage ? View.VISIBLE : View.GONE);
-            modelPanel.setVisibility(loggedIn ? View.VISIBLE : View.GONE);
-            settings.setVisibility((loggedIn && !accountPage) || busy ? View.VISIBLE : View.GONE);
+            for (View view : modelViews) view.setVisibility(loggedIn ? View.VISIBLE : View.GONE);
+            for (View view : loginViews) view.setVisibility(loginActive ? View.VISIBLE : View.GONE);
+            settings.setVisibility(loggedIn && !accountPage ? View.VISIBLE : View.GONE);
             settings.setEnabled(initialized);
-            closeButton.setText(accountPage ? "Close" : "Juggluco");
+            activityButton.setVisibility(loggedIn || busy ? View.VISIBLE : View.GONE);
+            activityButton.setEnabled(initialized);
+            closeButton.setText(s(R.string.jgchat_close));
             progressRow.setVisibility(busy || !loggedIn ? View.VISIBLE : View.GONE);
             thinking.setVisibility(busy ? View.VISIBLE : View.GONE);
             elapsed.setVisibility(busy ? View.VISIBLE : View.GONE);
             newChat.setVisibility(loggedIn ? View.VISIBLE : View.GONE);
-            signIn.setText(loggedIn ? "Sign in again" : "Sign in");
+            signIn.setText(loggedIn ? s(R.string.jgchat_sign_in_again) : s(R.string.jgchat_sign_in));
             signIn.setEnabled(initialized && !busy);
             signOut.setEnabled(initialized && !busy);
             newChat.setEnabled(initialized && !busy);
@@ -1540,44 +1509,35 @@ public final class JugglucoChat {
             chooseReasoning.setEnabled(initialized && loggedIn && !busy);
             internet.setEnabled(initialized && loggedIn && !busy);
             savedFiles.setEnabled(initialized && !busy);
+            boolean hasChat = messageCount > 0 || hasPendingQuestion;
+            saveChat.setEnabled(initialized && hasChat);
+            shareChat.setEnabled(initialized && hasChat);
+            clearAnalysis.setVisibility(loggedIn ? View.VISIBLE : View.GONE);
+            clearAnalysis.setEnabled(initialized && !busy);
+            stopRequest.setVisibility(busy ? View.VISIBLE : View.GONE);
+            stopRequest.setEnabled(initialized && busy);
             Model selected = selectedModel();
-            chooseModel.setText(selected == null ? "Select a model" : selected.name.isEmpty() ? selected.id : selected.name);
-            chooseReasoning.setText("Reasoning: " + effortLabel(selectedEffort()));
+            chooseModel.setText(selected == null ? s(R.string.jgchat_select_a_model) : selected.name.isEmpty() ? selected.id : selected.name);
+            chooseReasoning.setText(s(R.string.jgchat_reasoning_value, effortLabel(selectedEffort())));
             question.setEnabled(initialized && loggedIn);
             String hint = selected == null
-                    ? "Choose a model in Settings, then ask a question" : "Ask about your Juggluco data";
+                    ? s(R.string.jgchat_choose_a_model_in_settings_then_ask_a_question) : s(R.string.jgchat_ask_about_your_juggluco_data);
             if (!TextUtils.equals(question.getHint(), hint)) question.setHint(hint);
             send.setEnabled(initialized && loggedIn && !busy
                     && selected != null
                     && !question.getText().toString().trim().isEmpty());
             openBrowser.setEnabled(busy && allowedLoginUrl(loginUrl));
             copyCode.setEnabled(busy && !userCode.isEmpty());
-        }
-        void showMore() {
-            List<String> labels = new ArrayList<>();
-            List<Runnable> actions = new ArrayList<>();
-            if (loggedIn && !settingsOpen) { labels.add("Settings"); actions.add(() -> showSettings(true)); }
-            labels.add("Activity"); actions.add(this::showActivity);
-            if (messageCount > 0 || hasPendingQuestion) {
-                labels.add("Save chat…"); actions.add(() -> chooseChatExport(false));
-                labels.add("Share chat…"); actions.add(() -> chooseChatExport(true));
-            }
-            if (loggedIn && !busy) { labels.add("Clear analysis memory"); actions.add(this::confirmClearAnalysis); }
-            if (busy) {
-                labels.add("Stop request");
-                actions.add(() -> { running.releaseWake(); invoke(JugglucoChat::nativeCancel); });
-            }
-            dismissChild();
-            childDialog = new AlertDialog.Builder(ui).setItems(labels.toArray(new String[0]),
-                    (d, which) -> actions.get(which).run()).setNegativeButton("Close", null).create();
-            childDialog.show();
+            settingsStatus.setText(status.getText());
+            settingsStatus.setVisibility(busy || !loggedIn ? View.VISIBLE : View.GONE);
+            displayPage(accountPage);
         }
         void chooseChatExport(boolean share) {
             dismissChild();
-            childDialog = new AlertDialog.Builder(ui).setTitle(share ? "Share chat" : "Save chat")
-                    .setItems(new String[]{"HTML · conversation and plots", "Text · conversation without images"},
+            childDialog = new AlertDialog.Builder(ui).setTitle(share ? s(R.string.jgchat_share_chat) : s(R.string.jgchat_save_chat_a8796cea))
+                    .setItems(new String[]{s(R.string.jgchat_html_conversation_and_plots), s(R.string.jgchat_text_conversation_without_images)},
                             (ignored, which) -> exportDocument(share, which == 0 ? "html" : "txt", null))
-                    .setNegativeButton("Cancel", null).create();
+                    .setNegativeButton(s(R.string.jgchat_cancel), null).create();
             childDialog.show();
         }
         @SuppressWarnings("deprecation")
@@ -1587,7 +1547,7 @@ public final class JugglucoChat {
             try {
                 FragmentManager manager = activity.getFragmentManager();
                 if (manager.findFragmentByTag(SaveFileFragment.TAG) != null) {
-                    localError = "A file export is already in progress."; showError(); return;
+                    localError = s(R.string.jgchat_file_export_in_progress); showError(); return;
                 }
                 Bundle args = new Bundle(); args.putString("format", format); args.putBoolean("share", share);
                 if (svg != null) args.putString("svg", svg);
@@ -1596,13 +1556,15 @@ public final class JugglucoChat {
                 manager.executePendingTransactions();
                 localError = ""; showError();
             } catch (RuntimeException failure) {
-                localError = "Could not start the export."; showError();
+                localError = s(R.string.jgchat_could_not_start_the_export); showError();
             }
         }
         void showError() {
-            String value = !localError.isEmpty() ? localError : serverError;
-            error.setText(value.isEmpty() ? "" : "Error: " + value);
+            String value = localError.isEmpty() ? serverError : localError;
+            error.setText(value.isEmpty() ? "" : s(R.string.jgchat_error_value, value));
             error.setVisibility(value.isEmpty() ? View.GONE : View.VISIBLE);
+            settingsError.setText(error.getText());
+            settingsError.setVisibility(error.getVisibility());
         }
         String message(Throwable failure) {
             String value = failure.getMessage();
@@ -1612,8 +1574,8 @@ public final class JugglucoChat {
         boolean invoke(NativeCall call) {
             if (closed || !initialized) return false;
             try {
-                String result = call.run();
-                localError = result == null ? "" : result;
+                NativeMessage result = call.run();
+                localError = result == null ? "" : result.text(ui);
                 if (result != null) { showError(); return false; }
                 refresh();
                 return true;
@@ -1630,8 +1592,8 @@ public final class JugglucoChat {
             if (closed || !initialized || draft.isEmpty() || selected == null || busy || !loggedIn) return;
             try {
                 running.publishPhoneActivity();
-                String result = nativeSendWithOptions(draft, selected.id, effort, internet.isChecked());
-                localError = result == null ? "" : result;
+                NativeMessage result = nativeSendWithOptionsMessages(draft, selected.id, effort, internet.isChecked());
+                localError = result == null ? "" : result.text(ui);
                 if (result != null) { showError(); return; }
                 // The native snapshot owns the submitted question, including
                 // while this view is absent. The editor is the next draft.
@@ -1648,14 +1610,14 @@ public final class JugglucoChat {
             if (messageCount == 0) { startNewChat(); return; }
             dismissChild();
             childDialog = new AlertDialog.Builder(ui)
-                    .setTitle("New chat")
-                    .setMessage("Start a new conversation? Saved results, working notes and earlier questions remain available to the assistant. Use Clear analysis memory in More to forget them.")
-                    .setPositiveButton("New chat", (ignored, which) -> startNewChat())
-                    .setNegativeButton("Cancel", null).create();
+                    .setTitle(s(R.string.jgchat_new_chat))
+                    .setMessage(s(R.string.jgchat_start_a_new_conversation_saved_results_working_notes_and_earlier_questions_remain_avai))
+                    .setPositiveButton(s(R.string.jgchat_new_chat), (ignored, which) -> startNewChat())
+                    .setNegativeButton(s(R.string.jgchat_cancel), null).create();
             childDialog.show();
         }
         void startNewChat() {
-            if (invoke(JugglucoChat::nativeNewChat)) {
+            if (invoke(JugglucoChat::nativeNewChatMessages)) {
                 question.setText("");
                 showSettings(false);
             }
@@ -1663,23 +1625,23 @@ public final class JugglucoChat {
         void confirmClearAnalysis() {
             dismissChild();
             childDialog = new AlertDialog.Builder(ui)
-                    .setTitle("Clear analysis memory")
-                    .setMessage("Delete saved analysis results, notes and archived conversations, and start a new chat? Juggluco records and generated files remain on the phone. The assistant will no longer have the old file references.")
-                    .setPositiveButton("Clear", (ignored, which) -> {
-                        if (invoke(JugglucoChat::nativeClearAnalysis)) { question.setText(""); showSettings(false); }
-                    }).setNegativeButton("Cancel", null).create();
+                    .setTitle(s(R.string.jgchat_clear_analysis_memory))
+                    .setMessage(s(R.string.jgchat_delete_saved_analysis_results_notes_and_archived_conversations_and_start_a_new_chat_ju))
+                    .setPositiveButton(s(R.string.jgchat_clear), (ignored, which) -> {
+                        if (invoke(JugglucoChat::nativeClearAnalysisMessages)) { question.setText(""); showSettings(false); }
+                    }).setNegativeButton(s(R.string.jgchat_cancel), null).create();
             childDialog.show();
         }
         void showModels() {
             dismissChild();
-            AlertDialog.Builder builder = new AlertDialog.Builder(ui).setTitle("Models")
-                    .setNegativeButton("Close", null)
-                    .setNeutralButton("Reload", (ignored, which) -> {
+            AlertDialog.Builder builder = new AlertDialog.Builder(ui).setTitle(s(R.string.jgchat_models))
+                    .setNegativeButton(s(R.string.jgchat_close), null)
+                    .setNeutralButton(s(R.string.jgchat_reload), (ignored, which) -> {
                         modelsRequested = true;
-                        invoke(JugglucoChat::nativeLoadModels);
+                        invoke(JugglucoChat::nativeLoadModelsMessages);
                     });
             if (models.isEmpty()) {
-                builder.setMessage("No capitalized GPT model names are available. Reload the model list.");
+                builder.setMessage(s(R.string.jgchat_no_capitalized_gpt_model_names_are_available_reload_the_model_list));
             } else {
                 final ArrayList<Model> choices = new ArrayList<>(models);
                 String[] labels = new String[choices.size()];
@@ -1711,24 +1673,23 @@ public final class JugglucoChat {
         }
         String effortLabel(String effort) {
             switch (effort) {
-                case "none": return "None";
-                case "minimal": return "Minimal";
-                case "low": return "Low";
-                case "medium": return "Medium";
-                case "high": return "High";
-                case "xhigh": return "Extra high";
-                case "max": return "Max";
-                default: return "Server default";
+                case "none": return s(R.string.jgchat_none);
+                case "minimal": return s(R.string.jgchat_minimal);
+                case "low": return s(R.string.jgchat_low);
+                case "medium": return s(R.string.jgchat_medium);
+                case "high": return s(R.string.jgchat_high);
+                case "xhigh": return s(R.string.jgchat_extra_high);
+                case "max": return s(R.string.jgchat_max);
+                default: return s(R.string.jgchat_server_default);
             }
         }
         void showReasoning() {
             dismissChild();
             Model item = selectedModel();
-            AlertDialog.Builder builder = new AlertDialog.Builder(ui).setTitle("Reasoning effort")
-                    .setNegativeButton("Close", null);
+            AlertDialog.Builder builder = new AlertDialog.Builder(ui).setTitle(s(R.string.jgchat_reasoning_effort))
+                    .setNegativeButton(s(R.string.jgchat_close), null);
             if (item == null || item.efforts.isEmpty()) {
-                builder.setMessage("No reasoning options are available for this model. "
-                        + "The server default will be used. Reload Models to check available options.");
+                builder.setMessage(s(R.string.jgchat_no_reasoning_options_are_available_for_this_model_the_server_default_will_be_used_relo));
             } else {
                 final String modelId = item.id;
                 final ArrayList<String> choices = new ArrayList<>();
@@ -1747,6 +1708,7 @@ public final class JugglucoChat {
             childDialog.show();
         }
         void dismissChild() {
+            keyboardPopup.dismiss();
             if (childDialog != null) { childDialog.dismiss(); childDialog = null; }
             activityDetails = null;
             if (chartDialog != null) { chartDialog.dismiss(); chartDialog = null; }
@@ -1763,8 +1725,8 @@ public final class JugglucoChat {
             activityDetails.setPadding(dp(12), dp(8), dp(12), dp(8));
             NestedScrollView scroll = new NestedScrollView(ui);
             scroll.addView(activityDetails, fullWidth());
-            childDialog = new AlertDialog.Builder(ui).setTitle("Current activity")
-                    .setView(scroll).setNegativeButton("Close", null).create();
+            childDialog = new AlertDialog.Builder(ui).setTitle(s(R.string.jgchat_current_activity))
+                    .setView(scroll).setNegativeButton(s(R.string.jgchat_close), null).create();
             childDialog.setOnDismissListener(ignored -> activityDetails = null);
             childDialog.show();
         }
@@ -1774,7 +1736,7 @@ public final class JugglucoChat {
             try {
                 String svg = nativeGetPlot(messageIndex, plotIndex);
                 if (svg == null || !svg.startsWith("<svg ") || svg.length() > 131072)
-                    throw new IllegalStateException("The plot is unavailable.");
+                    throw new IllegalStateException(s(R.string.jgchat_the_plot_is_unavailable));
                 final String originalSvg = svg;
                 if (ColorUtils.calculateLuminance(backgroundColor) <= 0.5)
                     svg = svg.replace("class=\"jg-plot\"", "class=\"jg-plot dark\"");
@@ -1798,19 +1760,19 @@ public final class JugglucoChat {
                 content.setBackgroundColor(backgroundColor);
                 LinearLayout toolbar = new LinearLayout(ui);
                 toolbar.setGravity(Gravity.CENTER_VERTICAL);
-                toolbar.addView(text("Plot · pinch to zoom"),
+                toolbar.addView(text(s(R.string.jgchat_plot_pinch_to_zoom)),
                         new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-                AppCompatButton more = button("More");
+                AppCompatButton more = button(s(R.string.jgchat_more));
                 more.setOnClickListener(v -> {
                     if (childDialog != null) childDialog.dismiss();
                     childDialog = new AlertDialog.Builder(ui)
-                            .setItems(new String[]{"Save plot…", "Share plot…"}, (ignored, which) -> {
+                            .setItems(new String[]{s(R.string.jgchat_save_plot), s(R.string.jgchat_share_plot_ellipsis)}, (ignored, which) -> {
                                 graph.dismiss(); exportDocument(which == 1, "svg", originalSvg);
-                            }).setNegativeButton("Cancel", null).create();
+                            }).setNegativeButton(s(R.string.jgchat_cancel), null).create();
                     childDialog.show();
                 });
                 toolbar.addView(more);
-                AppCompatButton close = button("Close");
+                AppCompatButton close = button(s(R.string.jgchat_close));
                 close.setOnClickListener(v -> graph.dismiss());
                 toolbar.addView(close);
                 content.addView(toolbar, fullWidth());
@@ -1843,7 +1805,7 @@ public final class JugglucoChat {
                         + "<style>html,body{margin:0;height:100%;}svg{width:100%;height:100%;display:block;}</style>"
                         + "</head><body>" + svg + "</body></html>", "text/html", "UTF-8", null);
             } catch (RuntimeException | LinkageError failure) {
-                dismissChild(); localError = "Could not display plot: " + message(failure); showError();
+                dismissChild(); localError = s(R.string.jgchat_plot_error, message(failure)); showError();
             }
         }
 
@@ -1854,7 +1816,65 @@ public final class JugglucoChat {
             running.settingsOpen = show;
             updateControls();
         }
+        void displayPage(boolean accountPage) {
+            if (!opened || closed || helpOpen) return;
+            if (accountPage) {
+                if (settingsAttached) return;
+                hideKeyboard();
+                dialog.hide();
+                MainActivity.addMyContentView(activity, settingsLayout, new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                settingsAttached = true;
+                WeakReference<ChatWindow> reference = new WeakReference<>(this);
+                MainActivity.setonback(() -> {
+                    ChatWindow window = reference.get();
+                    if (window != null) window.settingsBack();
+                });
+                settingsBackDepth = MainActivity.onbacknr();
+            } else {
+                removeSettings();
+                Window window = dialog.getWindow();
+                if (!dialog.isShowing() || (window != null && window.getDecorView().getVisibility() != View.VISIBLE)) {
+                    dialog.show();
+                    resizeDialog();
+                }
+            }
+        }
+        void settingsBack() {
+            // MainActivity has already popped this callback.
+            settingsBackDepth = 0;
+            settingsAttached = false;
+            tk.glucodata.settings.Settings.removeContentView(settingsLayout);
+            if (closed) return;
+            boolean loginActive = busy && (!loginUrl.isEmpty() || !userCode.isEmpty());
+            if (loggedIn && !loginActive) showSettings(false);
+            else dialogClose();
+        }
+        void removeSettings() {
+            if (!settingsAttached) return;
+            // Do not pop another Juggluco view which is above Settings.
+            if (MainActivity.onbacknr() == settingsBackDepth) MainActivity.poponback();
+            settingsBackDepth = 0;
+            settingsAttached = false;
+            tk.glucodata.settings.Settings.removeContentView(settingsLayout);
+        }
+        void showHelp() {
+            dismissChild();
+            hideKeyboard();
+            helpOpen = true;
+            try {
+                help.help(R.string.chatgpthelp, activity, ignored -> {
+                    helpOpen = false;
+                    updateControls();
+                });
+            } catch (RuntimeException failure) {
+                helpOpen = false;
+                updateControls();
+                localError = message(failure); showError();
+            }
+        }
         void hideKeyboard() {
+            keyboardPopup.dismiss();
             Window window = dialog.getWindow();
             if (window != null) WindowCompat.getInsetsController(window, root).hide(WindowInsetsCompat.Type.ime());
         }
@@ -1870,14 +1890,14 @@ public final class JugglucoChat {
         }
         void openLogin() {
             if (!allowedLoginUrl(loginUrl)) {
-                localError = "The sign-in address is not the expected OpenAI page.";
+                localError = s(R.string.jgchat_the_sign_in_address_is_not_the_expected_openai_page);
                 showError();
                 return;
             }
             try {
                 activity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(loginUrl)));
             } catch (RuntimeException failure) {
-                localError = "Could not open the sign-in page: " + message(failure);
+                localError = s(R.string.jgchat_sign_in_error, message(failure));
                 showError();
             }
         }
@@ -1885,8 +1905,8 @@ public final class JugglucoChat {
             if (userCode.isEmpty()) return;
             try {
                 ClipboardManager clipboard = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
-                if (clipboard == null) throw new IllegalStateException("Clipboard unavailable");
-                ClipData clip = ClipData.newPlainText("OpenAI one-time code", userCode);
+                if (clipboard == null) throw new IllegalStateException(s(R.string.jgchat_clipboard_unavailable));
+                ClipData clip = ClipData.newPlainText(s(R.string.jgchat_openai_one_time_code), userCode);
                 if (Build.VERSION.SDK_INT >= 24) {
                     PersistableBundle extras = new PersistableBundle();
                     extras.putBoolean("android.content.extra.IS_SENSITIVE", true);
@@ -1894,7 +1914,7 @@ public final class JugglucoChat {
                 }
                 clipboard.setPrimaryClip(clip);
             } catch (RuntimeException failure) {
-                localError = "Could not copy the code: " + message(failure);
+                localError = s(R.string.jgchat_copy_code_error, message(failure));
                 showError();
             }
         }
@@ -1902,17 +1922,18 @@ public final class JugglucoChat {
         void dialogClose() {
             hideKeyboard();
             running.restoreKeyboard = false;
-            running.shortcutWanted = running.shortcutEnabled();
             // Dismiss only the chat. Juggluco owns the underlying screen and
             // its back stack; never discard unfinished settings on that stack.
             dialog.dismiss();
-            running.showShortcut(activity);
+            close(); // Settings can close before the chat dialog was first shown.
         }
         void close() {
             if (closed) return;
             saveSelection(); saveScroll();
             running.settingsOpen = settingsOpen;
             closed = true;
+            removeSettings();
+            keyboardPopup.dismiss();
             handler.removeCallbacksAndMessages(null);
             if (chatSurface.getViewTreeObserver().isAlive())
                 chatSurface.getViewTreeObserver().removeOnGlobalLayoutListener(chatGeometryListener);
@@ -2005,21 +2026,39 @@ public final class JugglucoChat {
                     keyboardTop = chatVisibleBounds.bottom;
                 }
             }
-            keyboardDone.setVisibility(visible ? View.VISIBLE : View.GONE);
-            if (visible) {
-                chatSurface.getLocationOnScreen(chatScreenPosition);
-                float x = Math.max(left, Math.min(chatAvailableBounds.right, chatDecorBounds.right)
-                        - chatScreenPosition[0] - dp(8) - keyboardDone.getMeasuredWidth());
-                float y = Math.max(top, keyboardTop - chatScreenPosition[1] - keyboardDone.getMeasuredHeight());
-                keyboardDone.setX(x);
-                keyboardDone.setY(y);
-            }
-            String report = "chat geometry overlay v1: decor=" + chatDecorBounds
+            boolean rtl = activity.getResources().getConfiguration().getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+            int hideX = 0, hideY = 0, popupX = 0, popupY = 0;
+            if (visible && resumed && !settingsAttached && !helpOpen && dialog.isShowing()
+                    && (childDialog == null || !childDialog.isShowing())
+                    && (chartDialog == null || !chartDialog.isShowing())) {
+                int hideLeft = Math.max(chatAvailableBounds.left, chatDecorBounds.left);
+                int hideRight = Math.max(hideLeft, Math.min(chatAvailableBounds.right, chatDecorBounds.right));
+                keyboardHide.measure(View.MeasureSpec.makeMeasureSpec(hideRight - hideLeft, View.MeasureSpec.AT_MOST),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+                int width = keyboardHide.getMeasuredWidth(), height = keyboardHide.getMeasuredHeight();
+                popupX = keyboardButtonLeft(width, rtl, hideLeft, hideRight, dp(8), chatDecorBounds.left);
+                hideX = chatDecorBounds.left + popupX;
+                hideY = keyboardButtonTop(keyboardTop, height, chatWindowBounds.height() >= chatWindowBounds.width(),
+                        chatAvailableBounds.top, chatAvailableBounds.bottom);
+                popupY = hideY - chatDecorBounds.top;
+                try {
+                    if (keyboardPopup.isShowing()) keyboardPopup.update(popupX, popupY, width, height);
+                    else {
+                        keyboardPopup.setWidth(width); keyboardPopup.setHeight(height);
+                        // RTL is already resolved above; these are physical offsets.
+                        keyboardPopup.showAtLocation(chatSurface, Gravity.TOP | Gravity.LEFT, popupX, popupY);
+                    }
+                } catch (WindowManager.BadTokenException | IllegalStateException unavailable) {
+                    keyboardPopup.dismiss();
+                }
+            } else keyboardPopup.dismiss();
+            String report = "chat geometry overlay v3: decor=" + chatDecorBounds
                     + " content=" + chatContentBounds + " bars=" + bars + " ime=" + ime
                     + " padding=" + left + "," + top + "," + right + "," + bottom
                     + " keyboardVisible=" + visible + " keyboardTop=" + keyboardTop
-                    + " done=" + keyboardDone.getX() + "," + keyboardDone.getY()
-                    + "," + keyboardDone.getWidth() + "," + keyboardDone.getHeight();
+                    + " hide=" + hideX + "," + hideY + "," + keyboardHide.getMeasuredWidth()
+                    + "," + keyboardHide.getMeasuredHeight() + " rtl=" + rtl
+                    + " popupOffset=" + popupX + "," + popupY + " popup=" + keyboardPopup.isShowing();
             if (!report.equals(lastGeometryReport)) {
                 Log.i("JugglucoChat", report);
                 lastGeometryReport = report;
@@ -2048,6 +2087,7 @@ public final class JugglucoChat {
             if (target == activity) {
                 saveSelection(); saveScroll();
                 resumed = false;
+                keyboardPopup.dismiss();
                 handler.removeCallbacksAndMessages(null);
                 // Monitoring belongs to the application, including while a
                 // browser, document picker or Juggluco curve is on screen.
@@ -2073,4 +2113,533 @@ public final class JugglucoChat {
     }
 
 
+    /** Native status/errors carry numeric IDs and unformatted arguments.
+     * The generated array is indexed directly; English text never selects a resource. */
+    @Keep
+    static final class NativeMessage {
+        final int id, format;
+        final String[] args;
+        NativeMessage(int id, int format, String[] args) {
+            this.id = id; this.format = format; this.args = args == null ? new String[0] : args;
+        }
+        // BEGIN GENERATED NATIVE RESOURCES
+        private static final int[] RESOURCES = {
+            0,
+            R.string.jgchat_native_a_web_server_secret_consisting_only_of_one_or_two_dots_cannot_be_used_in_a_browser_pa, // 1
+            R.string.jgchat_native_aligning_glucose_entered_amounts_and_iob, // 2
+            R.string.jgchat_native_ambiguous_https_body_framing, // 3
+            R.string.jgchat_native_amount_outside_timeline_bounds, // 4
+            R.string.jgchat_native_an_analysis_transaction_is_already_active, // 5
+            R.string.jgchat_native_analysis_changes_require_a_transaction, // 6
+            R.string.jgchat_native_analysis_columns_must_have_unique_nonempty_names_case_insensitive, // 7
+            R.string.jgchat_native_analysis_has_reached_its_saved_file_bundle_limit, // 8
+            R.string.jgchat_native_analysis_index_is_full_use_more_clear_analysis_memory, // 9
+            R.string.jgchat_native_analysis_input_exceeds_100000_rows_500000_cells_aggregate_smaller_windows_first, // 10
+            R.string.jgchat_native_analysis_memory_cleared, // 11
+            R.string.jgchat_native_analysis_memory_is_full_64_mib_4096_entries_use_more_clear_analysis_memory, // 12
+            R.string.jgchat_native_analysis_needs_one_sql_select_at_most_16_kib_and_at_most_16_tables, // 13
+            R.string.jgchat_native_analysis_output_exceeds_20000_rows_2_mib_use_aggregation_or_an_explicit_limit_no_part, // 14
+            R.string.jgchat_native_analysis_produced_a_nonfinite_numeric_result, // 15
+            R.string.jgchat_native_analysis_reached_its_five_second_20_million_step_budget_narrow_or_aggregate_the_input, // 16
+            R.string.jgchat_native_analysis_source_does_not_contain_that_table_path, // 17
+            R.string.jgchat_native_analysis_source_snapshots_exceed_16_mib, // 18
+            R.string.jgchat_native_analysis_table_exceeds_100000_rows_500000_cells, // 19
+            R.string.jgchat_native_analysis_table_exceeds_500000_cells, // 20
+            R.string.jgchat_native_analysis_table_exceeds_64_columns, // 21
+            R.string.jgchat_native_android_activity_text_too_long, // 22
+            R.string.jgchat_native_android_system_ca_certificates_unavailable, // 23
+            R.string.jgchat_native_answer_attachments_exceed_the_transcript_limit, // 24
+            R.string.jgchat_native_application_storage_directory_must_be_absolute, // 25
+            R.string.jgchat_native_array_offset_exceeds_its_size, // 26
+            R.string.jgchat_native_at_most_1000_sensor_ids_can_be_matched_at_once, // 27
+            R.string.jgchat_native_authentication_cancelled, // 28
+            R.string.jgchat_native_authentication_network_request_failed, // 29
+            R.string.jgchat_native_authentication_request_failed_http, // 30
+            R.string.jgchat_native_binary_sql_results_are_not_supported, // 31
+            R.string.jgchat_native_calculating_juggluco_iob, // 32
+            R.string.jgchat_native_calculating_juggluco_statistics, // 33
+            R.string.jgchat_native_calculating_over_saved_datasets, // 34
+            R.string.jgchat_native_calculating_predictions_from_a_saved_model, // 35
+            R.string.jgchat_native_cancel_the_current_operation_and_wait_for_it_to_finish, // 36
+            R.string.jgchat_native_cancelled, // 37
+            R.string.jgchat_native_cannot_allocate_a_result_identifier, // 38
+            R.string.jgchat_native_cannot_attach_tls_socket, // 39
+            R.string.jgchat_native_cannot_configure_tls_hostname_verification, // 40
+            R.string.jgchat_native_cannot_create_private_analysis_storage, // 41
+            R.string.jgchat_native_cannot_create_private_chat_state, // 42
+            R.string.jgchat_native_cannot_create_private_chat_storage, // 43
+            R.string.jgchat_native_cannot_flush_analysis_result, // 44
+            R.string.jgchat_native_cannot_format_plot_time, // 45
+            R.string.jgchat_native_cannot_format_timeline_time, // 46
+            R.string.jgchat_native_cannot_initialize_local_analysis_database, // 47
+            R.string.jgchat_native_cannot_open_private_analysis_storage, // 48
+            R.string.jgchat_native_cannot_open_private_chat_storage, // 49
+            R.string.jgchat_native_cannot_open_saved_chat_state, // 50
+            R.string.jgchat_native_cannot_protect_native_tls_write_against_sigpipe, // 51
+            R.string.jgchat_native_cannot_read_saved_analysis_result, // 52
+            R.string.jgchat_native_cannot_read_saved_chat_state, // 53
+            R.string.jgchat_native_cannot_read_text, // 54
+            R.string.jgchat_native_cannot_read_the_chat_export, // 55
+            R.string.jgchat_native_cannot_remove_saved_chat_state, // 56
+            R.string.jgchat_native_cannot_remove_temporary_chat_state, // 57
+            R.string.jgchat_native_cannot_replace_temporary_chat_state, // 58
+            R.string.jgchat_native_cannot_require_tls_1_2_or_newer, // 59
+            R.string.jgchat_native_cannot_restore_analysis_during_a_transaction, // 60
+            R.string.jgchat_native_cannot_restrict_private_chat_storage_permissions, // 61
+            R.string.jgchat_native_cannot_restrict_saved_chat_state_permissions, // 62
+            R.string.jgchat_native_cannot_save_analysis_result, // 63
+            R.string.jgchat_native_cannot_save_private_chat_state, // 64
+            R.string.jgchat_native_cannot_set_tls_server_name, // 65
+            R.string.jgchat_native_cannot_write_analysis_result, // 66
+            R.string.jgchat_native_cannot_write_private_chat_state, // 67
+            R.string.jgchat_native_cannot_write_the_chat_export, // 68
+            R.string.jgchat_native_chat_operation_failed, // 69
+            R.string.jgchat_native_chat_state_is_too_large_start_a_new_chat, // 70
+            R.string.jgchat_native_chat_storage_has_not_been_initialized, // 71
+            R.string.jgchat_native_chat_storage_is_already_initialized_elsewhere, // 72
+            R.string.jgchat_native_chat_storage_is_not_initialized, // 73
+            R.string.jgchat_native_chatclient_requires_http_tools_and_token_storage, // 74
+            R.string.jgchat_native_chatgpt_authentication_failed_sign_in_again, // 75
+            R.string.jgchat_native_chatgpt_sign_in_expired_sign_in_again, // 76
+            R.string.jgchat_native_checking_completed_response, // 77
+            R.string.jgchat_native_checking_stream_gaps_and_backfill, // 78
+            R.string.jgchat_native_codex_https_request_failed, // 79
+            R.string.jgchat_native_codex_https_request_failed_a923065d, // 80
+            R.string.jgchat_native_codex_response_exceeds_the_size_limit, // 81
+            R.string.jgchat_native_codex_response_failed, // 82
+            R.string.jgchat_native_codex_response_incomplete, // 83
+            R.string.jgchat_native_completed_response_contained_an_error, // 84
+            R.string.jgchat_native_completed_response_contained_no_final_text_answer, // 85
+            R.string.jgchat_native_completed_response_contained_no_output, // 86
+            R.string.jgchat_native_completed_response_lacks_an_identifier, // 87
+            R.string.jgchat_native_compressed_https_responses_are_unsupported, // 88
+            R.string.jgchat_native_conflicting_output_item_events, // 89
+            R.string.jgchat_native_connecting, // 90
+            R.string.jgchat_native_conversation_exceeds_the_2_mib_history_limit_start_a_new_conversation, // 91
+            R.string.jgchat_native_could_not_write_the_complete_chat_export, // 92
+            R.string.jgchat_native_delimited_table_has_inconsistent_column_counts, // 93
+            R.string.jgchat_native_delimited_table_is_missing_its_header, // 94
+            R.string.jgchat_native_device_authorization_expired, // 95
+            R.string.jgchat_native_drawing_calculated_results_and_intervals, // 96
+            R.string.jgchat_native_drawing_glucose_curve, // 97
+            R.string.jgchat_native_drawing_plot, // 98
+            R.string.jgchat_native_duplicate_https_content_length, // 99
+            R.string.jgchat_native_duplicate_https_request_header, // 100
+            R.string.jgchat_native_duplicate_output_item_identifier, // 101
+            R.string.jgchat_native_empty_source_has_no_columns_inspect_its_metadata_first, // 102
+            R.string.jgchat_native_encrypted_tool_arguments_are_not_supported, // 103
+            R.string.jgchat_native_enter_a_question_shorter_than_32_kib, // 104
+            R.string.jgchat_native_file_bundle_is_not_referenced_by_this_account_s_workspace, // 105
+            R.string.jgchat_native_fitting_and_evaluating_a_numerical_model, // 106
+            R.string.jgchat_native_framing_field_in_https_trailer, // 107
+            R.string.jgchat_native_function_arguments_exceed_the_size_limit, // 108
+            R.string.jgchat_native_function_arguments_must_be_json_text, // 109
+            R.string.jgchat_native_function_arguments_must_be_an_object, // 110
+            R.string.jgchat_native_https_chunk_line_too_large, // 111
+            R.string.jgchat_native_https_header_allocation_failed, // 112
+            R.string.jgchat_native_https_library_initialization_failed, // 113
+            R.string.jgchat_native_https_request_allocation_failed, // 114
+            R.string.jgchat_native_https_request_headers_too_large, // 115
+            R.string.jgchat_native_https_response_headers_too_large, // 116
+            R.string.jgchat_native_https_response_too_large, // 117
+            R.string.jgchat_native_https_trailers_too_large, // 118
+            R.string.jgchat_native_https_wire_response_too_large, // 119
+            R.string.jgchat_native_history_contains_an_unfinished_turn, // 120
+            R.string.jgchat_native_history_contains_an_unpaired_tool_result, // 121
+            R.string.jgchat_native_history_contains_duplicate_tool_calls, // 122
+            R.string.jgchat_native_history_must_start_with_a_user_message, // 123
+            R.string.jgchat_native_incomplete_https_response, // 124
+            R.string.jgchat_native_incomplete_output_item, // 125
+            R.string.jgchat_native_inconsistent_response_event_type, // 126
+            R.string.jgchat_native_increase_the_page_limit_to_fit_one_utf_8_character, // 127
+            R.string.jgchat_native_invalid_android_wear_node, // 128
+            R.string.jgchat_native_invalid_android_wear_node_text, // 129
+            R.string.jgchat_native_invalid_android_wear_snapshot, // 130
+            R.string.jgchat_native_invalid_android_activity_field_type, // 131
+            R.string.jgchat_native_invalid_android_activity_snapshot, // 132
+            R.string.jgchat_native_invalid_android_activity_status, // 133
+            R.string.jgchat_native_invalid_https_body_framing, // 134
+            R.string.jgchat_native_invalid_https_chunk_extension, // 135
+            R.string.jgchat_native_invalid_https_request_configuration, // 136
+            R.string.jgchat_native_invalid_https_request_header, // 137
+            R.string.jgchat_native_invalid_https_request_path, // 138
+            R.string.jgchat_native_invalid_https_response_limit, // 139
+            R.string.jgchat_native_invalid_juggluco_tool_arguments, // 140
+            R.string.jgchat_native_invalid_activity_count, // 141
+            R.string.jgchat_native_invalid_activity_record, // 142
+            R.string.jgchat_native_invalid_alarm_settings_counts, // 143
+            R.string.jgchat_native_invalid_analysis_row_width, // 144
+            R.string.jgchat_native_invalid_authentication_response, // 145
+            R.string.jgchat_native_invalid_boolean_local_data_metadata, // 146
+            R.string.jgchat_native_invalid_calculation_title_tables, // 147
+            R.string.jgchat_native_invalid_chat_export_descriptor, // 148
+            R.string.jgchat_native_invalid_chat_state_or_server_response, // 149
+            R.string.jgchat_native_invalid_completed_output_item_event, // 150
+            R.string.jgchat_native_invalid_conversation_item_identifier, // 151
+            R.string.jgchat_native_invalid_delimited_file_quoting, // 152
+            R.string.jgchat_native_invalid_file_bundle_identifier, // 153
+            R.string.jgchat_native_invalid_file_bundle_use_1_8_text_files_safe_filenames_at_most_48_kib_total_and_an_htm, // 154
+            R.string.jgchat_native_invalid_function_call_identifier, // 155
+            R.string.jgchat_native_invalid_interim_https_response, // 156
+            R.string.jgchat_native_invalid_local_juggluco_response_header, // 157
+            R.string.jgchat_native_invalid_local_juggluco_response_status, // 158
+            R.string.jgchat_native_invalid_local_file_bundle, // 159
+            R.string.jgchat_native_invalid_local_plot_attachment, // 160
+            R.string.jgchat_native_invalid_local_tool_definition, // 161
+            R.string.jgchat_native_invalid_local_tool_definitions_expected_a_non_empty_array, // 162
+            R.string.jgchat_native_invalid_mirror_count, // 163
+            R.string.jgchat_native_invalid_native_statistics_envelope, // 164
+            R.string.jgchat_native_invalid_native_statistics_response, // 165
+            R.string.jgchat_native_invalid_numeric_local_data_metadata, // 166
+            R.string.jgchat_native_invalid_or_duplicate_analysis_table_alias, // 167
+            R.string.jgchat_native_invalid_output_item_index, // 168
+            R.string.jgchat_native_invalid_plot_arguments_check_keys_text_limits_finite_coordinates_and_the_8_series_100, // 169
+            R.string.jgchat_native_invalid_plot_metadata, // 170
+            R.string.jgchat_native_invalid_plot_row, // 171
+            R.string.jgchat_native_invalid_plot_sensor, // 172
+            R.string.jgchat_native_invalid_plot_timestamp, // 173
+            R.string.jgchat_native_invalid_plot_value, // 174
+            R.string.jgchat_native_invalid_private_analysis_storage, // 175
+            R.string.jgchat_native_invalid_private_storage_name, // 176
+            R.string.jgchat_native_invalid_reasoning_effort, // 177
+            R.string.jgchat_native_invalid_saved_analysis_index, // 178
+            R.string.jgchat_native_invalid_saved_bundle_identifier, // 179
+            R.string.jgchat_native_invalid_saved_result_id, // 180
+            R.string.jgchat_native_invalid_saved_result_metadata, // 181
+            R.string.jgchat_native_invalid_saved_file_path, // 182
+            R.string.jgchat_native_invalid_sensor_count, // 183
+            R.string.jgchat_native_invalid_settings_count, // 184
+            R.string.jgchat_native_invalid_stream_analysis_bounds, // 185
+            R.string.jgchat_native_invalid_stream_count_or_more_than_eight_sensors_shorten_the_interval, // 186
+            R.string.jgchat_native_invalid_stream_rate_unavailable_rate_must_be_a_native_nan_token, // 187
+            R.string.jgchat_native_invalid_stream_row_count, // 188
+            R.string.jgchat_native_invalid_stream_sensor_id, // 189
+            R.string.jgchat_native_invalid_stream_timestamp, // 190
+            R.string.jgchat_native_invalid_timeline_amount_count, // 191
+            R.string.jgchat_native_invalid_timeline_bounds, // 192
+            R.string.jgchat_native_invalid_timeline_count_or_more_than_eight_sensors_shorten_the_interval, // 193
+            R.string.jgchat_native_invalid_timeline_glucose_value, // 194
+            R.string.jgchat_native_invalid_timeline_row_count, // 195
+            R.string.jgchat_native_invalid_timeline_sensor, // 196
+            R.string.jgchat_native_invalid_timeline_timestamp, // 197
+            R.string.jgchat_native_invalid_timeline_unit, // 198
+            R.string.jgchat_native_invalid_transcript, // 199
+            R.string.jgchat_native_invalid_web_server_secret_configuration, // 200
+            R.string.jgchat_native_invalid_working_note, // 201
+            R.string.jgchat_native_invalid_workspace_tool_arguments, // 202
+            R.string.jgchat_native_json_nesting_limit_exceeded, // 203
+            R.string.jgchat_native_json_table_must_be_an_array_with_at_most_100000_rows, // 204
+            R.string.jgchat_native_juggluco_settings_are_not_initialized, // 205
+            R.string.jgchat_native_listing_reusable_analysis_files, // 206
+            R.string.jgchat_native_loading_available_models, // 207
+            R.string.jgchat_native_local_juggluco_json_result_must_be_an_object, // 208
+            R.string.jgchat_native_local_juggluco_response_length_mismatch, // 209
+            R.string.jgchat_native_local_data_response_is_missing_metadata, // 210
+            R.string.jgchat_native_local_data_result_exceeds_128_kib_request_a_smaller_period, // 211
+            R.string.jgchat_native_looking_up_sensor_in_full_history, // 212
+            R.string.jgchat_native_malformed_codex_model_catalog, // 213
+            R.string.jgchat_native_malformed_https_chunk_terminator, // 214
+            R.string.jgchat_native_malformed_https_header, // 215
+            R.string.jgchat_native_malformed_https_headers, // 216
+            R.string.jgchat_native_malformed_https_status, // 217
+            R.string.jgchat_native_malformed_completed_response_output, // 218
+            R.string.jgchat_native_malformed_conversation_item, // 219
+            R.string.jgchat_native_malformed_encrypted_context, // 220
+            R.string.jgchat_native_malformed_local_juggluco_data_response, // 221
+            R.string.jgchat_native_malformed_local_tool_result, // 222
+            R.string.jgchat_native_malformed_message_content, // 223
+            R.string.jgchat_native_malformed_reasoning_context, // 224
+            R.string.jgchat_native_malformed_response_event, // 225
+            R.string.jgchat_native_malformed_response_completed_event, // 226
+            R.string.jgchat_native_malformed_selectable_model_metadata, // 227
+            R.string.jgchat_native_malformed_web_search_action, // 228
+            R.string.jgchat_native_missing_android_activity_section, // 229
+            R.string.jgchat_native_missing_glucose_sensorid_header, // 230
+            R.string.jgchat_native_missing_glucose_sensor_column, // 231
+            R.string.jgchat_native_missing_numerical_table_column, // 232
+            R.string.jgchat_native_missing_or_invalid_chatgpt_login_sign_in_again, // 233
+            R.string.jgchat_native_missing_plot_columns, // 234
+            R.string.jgchat_native_missing_timeline_glucose_columns, // 235
+            R.string.jgchat_native_missing_workspace_tool_argument, // 236
+            R.string.jgchat_native_model_is_working, // 237
+            R.string.jgchat_native_model_requested_an_unavailable_tool, // 238
+            R.string.jgchat_native_more_than_200_stream_intervals_shorten_the_window_no_partial_analysis_returned, // 239
+            R.string.jgchat_native_native_https_dns_resolution_failed, // 240
+            R.string.jgchat_native_native_https_tcp_connection_failed, // 241
+            R.string.jgchat_native_native_https_cancelled, // 242
+            R.string.jgchat_native_native_https_socket_closed, // 243
+            R.string.jgchat_native_native_https_socket_poll_failed, // 244
+            R.string.jgchat_native_native_https_timed_out, // 245
+            R.string.jgchat_native_native_openssl_boringssl_libraries_unavailable, // 246
+            R.string.jgchat_native_native_tls_ip_certificate_verification_unavailable, // 247
+            R.string.jgchat_native_native_tls_sni_unavailable, // 248
+            R.string.jgchat_native_native_tls_connection_allocation_failed, // 249
+            R.string.jgchat_native_native_tls_context_allocation_failed, // 250
+            R.string.jgchat_native_native_tls_hostname_verification_unavailable, // 251
+            R.string.jgchat_native_native_tls_initialization_failed, // 252
+            R.string.jgchat_native_native_tls_minimum_version_control_unavailable, // 253
+            R.string.jgchat_native_native_tls_read_failed_or_ended_without_close_notify, // 254
+            R.string.jgchat_native_no_chat_is_available_to_export, // 255
+            R.string.jgchat_native_no_models_returned_reload_models, // 256
+            R.string.jgchat_native_numerical_calculation_needs_a_title_and_saved_source, // 257
+            R.string.jgchat_native_numerical_source_does_not_contain_that_table_path, // 258
+            R.string.jgchat_native_numerical_work_exceeds_10_seconds_60_million_operations_use_fewer_rows_features_targe, // 259
+            R.string.jgchat_native_object_scalar_reads_require_offset_zero, // 260
+            R.string.jgchat_native_only_notes_can_supersede_notes, // 261
+            R.string.jgchat_native_only_one_read_only_select_without_parameters_is_allowed, // 262
+            R.string.jgchat_native_open_the_sign_in_page_and_enter_the_code, // 263
+            R.string.jgchat_native_operation_failed, // 264
+            R.string.jgchat_native_output_item_index_out_of_range, // 265
+            R.string.jgchat_native_per_question_limit_of_24_local_data_calls_reached, // 266
+            R.string.jgchat_native_per_question_limit_of_25_response_rounds_reached, // 267
+            R.string.jgchat_native_per_question_response_round_limit_reached, // 268
+            R.string.jgchat_native_plot_count_mismatch, // 269
+            R.string.jgchat_native_preparing_a_data_request, // 270
+            R.string.jgchat_native_preparing_files, // 271
+            R.string.jgchat_native_progress_nesting_limit, // 272
+            R.string.jgchat_native_question_exceeded_the_10_minute_time_limit, // 273
+            R.string.jgchat_native_question_must_contain_1_65536_bytes, // 274
+            R.string.jgchat_native_reading_juggluco_settings, // 275
+            R.string.jgchat_native_reading_a_saved_analysis_file, // 276
+            R.string.jgchat_native_reading_entered_amounts, // 277
+            R.string.jgchat_native_reading_food_composition, // 278
+            R.string.jgchat_native_reading_glucose, // 279
+            R.string.jgchat_native_reading_ingredient_definitions, // 280
+            R.string.jgchat_native_reading_local_data, // 281
+            R.string.jgchat_native_reading_meal_contents, // 282
+            R.string.jgchat_native_reading_mirrors_and_wear_os_watches, // 283
+            R.string.jgchat_native_reading_phone_alarm_settings, // 284
+            R.string.jgchat_native_reading_sensor_and_garmin_activity, // 285
+            R.string.jgchat_native_reading_sensor_types_and_wear_times, // 286
+            R.string.jgchat_native_reading_stream_and_history_calibrations, // 287
+            R.string.jgchat_native_reading_units_labels_and_iob_settings, // 288
+            R.string.jgchat_native_reading_web_server_capabilities, // 289
+            R.string.jgchat_native_ready, // 290
+            R.string.jgchat_native_reasoning_effort_is_not_offered_for_this_model_reload_models_or_choose_server_default, // 291
+            R.string.jgchat_native_refreshed_login_could_not_be_saved_sign_in_again, // 292
+            R.string.jgchat_native_reopening_saved_evidence, // 293
+            R.string.jgchat_native_request_cancelled, // 294
+            R.string.jgchat_native_reserved_https_request_header, // 295
+            R.string.jgchat_native_response_completion_has_a_non_completed_status, // 296
+            R.string.jgchat_native_response_data_followed_the_stream_terminator, // 297
+            R.string.jgchat_native_response_event_limit_exceeded, // 298
+            R.string.jgchat_native_response_is_missing_an_output_item, // 299
+            R.string.jgchat_native_response_repeated_a_function_call_identifier, // 300
+            R.string.jgchat_native_result_metadata_exceeds_a_page_narrow_the_source_query, // 301
+            R.string.jgchat_native_row_exceeds_page_size_use_a_json_pointer_into_that_row, // 302
+            R.string.jgchat_native_saved_json_exceeds_the_nesting_limit, // 303
+            R.string.jgchat_native_saved_analysis_exceeds_its_capacity, // 304
+            R.string.jgchat_native_saved_analysis_result_contains_invalid_json, // 305
+            R.string.jgchat_native_saved_chat_state_is_invalid_sign_in_again_or_start_a_new_chat, // 306
+            R.string.jgchat_native_saved_chat_state_is_not_a_bounded_regular_file, // 307
+            R.string.jgchat_native_saved_chat_state_is_too_large, // 308
+            R.string.jgchat_native_saved_conversation_or_analysis_index_could_not_be_read_starting_a_new_chat, // 309
+            R.string.jgchat_native_saved_result_does_not_contain_that_json_pointer_path, // 310
+            R.string.jgchat_native_saved_result_is_missing_or_invalid_retrieve_the_source_data_again, // 311
+            R.string.jgchat_native_saved_result_was_not_found_in_this_account_s_workspace, // 312
+            R.string.jgchat_native_saved_sign_in_could_not_be_read_sign_in_again, // 313
+            R.string.jgchat_native_saving_generated_files, // 314
+            R.string.jgchat_native_saving_glucose_dataset_for_local_analysis, // 315
+            R.string.jgchat_native_saving_investigation_notes, // 316
+            R.string.jgchat_native_searching_juggluco_food_database, // 317
+            R.string.jgchat_native_searching_and_reading_web_pages, // 318
+            R.string.jgchat_native_searching_saved_analysis_and_earlier_conversations, // 319
+            R.string.jgchat_native_searching_the_internet, // 320
+            R.string.jgchat_native_select_a_model, // 321
+            R.string.jgchat_native_select_a_valid_model_from_the_returned_model_catalog, // 322
+            R.string.jgchat_native_sensor_id_must_be_1_128_bytes_without_nul_tab_or_newline, // 323
+            R.string.jgchat_native_sensor_index_must_be_0_1000000_or_null, // 324
+            R.string.jgchat_native_sign_in_first, // 325
+            R.string.jgchat_native_sign_in_to_ask_a_question, // 326
+            R.string.jgchat_native_signed_in, // 327
+            R.string.jgchat_native_signed_in_select_a_model, // 328
+            R.string.jgchat_native_signed_out, // 329
+            R.string.jgchat_native_signed_out_for_this_run_but_saved_credentials_could_not_be_removed_retry_sign_out, // 330
+            R.string.jgchat_native_signed_out_but_the_saved_conversation_could_not_be_removed_retry_sign_out, // 331
+            R.string.jgchat_native_stream_analysis_requires_stream_data_and_a_1_1440_minute_threshold, // 332
+            R.string.jgchat_native_stream_ended_before_response_completed, // 333
+            R.string.jgchat_native_system_ca_certificates_unavailable, // 334
+            R.string.jgchat_native_tls_certificate_ip_mismatch, // 335
+            R.string.jgchat_native_tls_certificate_hostname_mismatch, // 336
+            R.string.jgchat_native_tls_certificate_chain_verification_failed, // 337
+            R.string.jgchat_native_tls_hostname_verification_unavailable, // 338
+            R.string.jgchat_native_tls_peer_certificate_missing, // 339
+            R.string.jgchat_native_table_format_must_be_json_csv_or_tsv_and_match_its_source, // 340
+            R.string.jgchat_native_text_is_too_long, // 341
+            R.string.jgchat_native_text_offset_must_be_a_utf_8_character_boundary_within_the_string, // 342
+            R.string.jgchat_native_the_chat_export_is_too_large, // 343
+            R.string.jgchat_native_the_file_is_saved_enable_web_server_in_settings_exchange_data_web_server_then_open_it, // 344
+            R.string.jgchat_native_the_plot_is_unavailable, // 345
+            R.string.jgchat_native_there_are_no_messages_to_export, // 346
+            R.string.jgchat_native_thinking, // 347
+            R.string.jgchat_native_thinking_summary, // 348
+            R.string.jgchat_native_tool_namespaces_are_not_supported, // 349
+            R.string.jgchat_native_truncated_response_event, // 350
+            R.string.jgchat_native_truncated_response_event_line, // 351
+            R.string.jgchat_native_unclosed_delimited_file_quote, // 352
+            R.string.jgchat_native_unexpected_https_body_framing, // 353
+            R.string.jgchat_native_unexpected_data_after_https_body, // 354
+            R.string.jgchat_native_unexpected_data_after_https_response, // 355
+            R.string.jgchat_native_unexpected_local_juggluco_response_content_type, // 356
+            R.string.jgchat_native_unexpected_sensor_id_in_exact_lookup, // 357
+            R.string.jgchat_native_unknown_juggluco_data_tool, // 358
+            R.string.jgchat_native_unknown_activity_section, // 359
+            R.string.jgchat_native_unknown_analysis_search_kind, // 360
+            R.string.jgchat_native_unknown_settings_section, // 361
+            R.string.jgchat_native_unknown_workspace_tool, // 362
+            R.string.jgchat_native_unsigned_value_exceeds_sql_integer_range, // 363
+            R.string.jgchat_native_unsupported_codex_endpoint, // 364
+            R.string.jgchat_native_unsupported_https_content_encoding, // 365
+            R.string.jgchat_native_unsupported_https_request_method, // 366
+            R.string.jgchat_native_unsupported_https_status, // 367
+            R.string.jgchat_native_unsupported_https_transfer_encoding, // 368
+            R.string.jgchat_native_unsupported_chat_export_format, // 369
+            R.string.jgchat_native_unsupported_conversation_role, // 370
+            R.string.jgchat_native_unsupported_message_content, // 371
+            R.string.jgchat_native_unsupported_message_phase, // 372
+            R.string.jgchat_native_unsupported_native_statistics_schema, // 373
+            R.string.jgchat_native_unsupported_output_item_type, // 374
+            R.string.jgchat_native_workspace_argument_must_be_text, // 375
+            R.string.jgchat_native_workspace_numeric_argument_is_outside_its_bounds, // 376
+            R.string.jgchat_native_workspace_text_argument_exceeds_its_limit, // 377
+            R.string.jgchat_native_writing_reply, // 378
+            R.string.jgchat_native_external_detail, // 379
+            R.string.jgchat_waiting_round, // 380
+            R.string.jgchat_native_codex_http, // 381
+            R.string.jgchat_native_authentication_http, // 382
+            R.string.jgchat_native_no_selectable_models, // 383
+            R.string.jgchat_native_tls_function_unavailable, // 384
+            R.string.jgchat_native_missing_numerical_column, // 385
+            R.string.jgchat_native_analysis_sql, // 386
+            R.string.jgchat_native_invalid_tool_arguments, // 387
+            R.string.jgchat_native_completed_response_error, // 388
+            R.string.jgchat_native_native_tls_handshake_or_certificate_chain_verification_failed, // 389
+            R.string.jgchat_native_native_tls_write_failed, // 390
+            R.string.jgchat_native_model_id_must_identify_a_saved_juggluco_fit_result, // 391
+            R.string.jgchat_native_malformed_function_arguments, // 392
+            R.string.jgchat_native_malformed_response_event_json, // 393
+            R.string.jgchat_native_invalid_error_response, // 394
+            R.string.jgchat_native_cannot_create_generated_file_directory, // 395
+            R.string.jgchat_native_cannot_open_generated_file_directory, // 396
+            R.string.jgchat_native_cannot_create_generated_file, // 397
+            R.string.jgchat_native_cannot_write_generated_file, // 398
+            R.string.jgchat_native_cannot_flush_generated_file, // 399
+            R.string.jgchat_native_cannot_read_saved_file, // 400
+            R.string.jgchat_native_cannot_prepare_document_write, // 401
+            R.string.jgchat_native_cannot_generate_file_identifier, // 402
+            R.string.jgchat_native_invalid_app_files_directory, // 403
+            R.string.jgchat_native_cannot_open_app_files_directory, // 404
+            R.string.jgchat_native_saved_file_limit_reached_delete_old_bundles_under_web_server_upload_web_pages_chatgpt, // 405
+            R.string.jgchat_native_cannot_create_new_file_bundle, // 406
+            R.string.jgchat_native_cannot_open_new_file_bundle, // 407
+            R.string.jgchat_native_generated_file_identifier_collision, // 408
+            R.string.jgchat_native_cannot_commit_generated_files, // 409
+            R.string.jgchat_native_cannot_list_saved_files, // 410
+            R.string.jgchat_native_invalid_saved_file, // 411
+            R.string.jgchat_native_the_saved_file_is_no_longer_available, // 412
+            R.string.jgchat_native_invalid_saved_file_manifest, // 413
+            R.string.jgchat_native_file_is_not_part_of_this_generated_bundle, // 414
+            R.string.jgchat_native_document_is_not_writable, // 415
+            R.string.jgchat_native_could_not_write_the_selected_document, // 416
+            R.string.jgchat_native_could_not_check_the_selected_document, // 417
+            R.string.jgchat_native_could_not_finish_writing_the_selected_document, // 418
+            R.string.jgchat_native_invalid_numerical_tool_arguments, // 419
+            R.string.jgchat_native_missing_numerical_tool_argument, // 420
+            R.string.jgchat_native_numerical_column_name_argument_must_be_text, // 421
+            R.string.jgchat_native_invalid_numerical_column_name_length, // 422
+            R.string.jgchat_native_numerical_data_must_be_finite_json_numbers_within_1e100_prepare_csv_tsv_with_explicit, // 423
+            R.string.jgchat_native_numerical_overflow_or_unstable_model_rescale_inputs_or_simplify_the_model, // 424
+            R.string.jgchat_native_invalid_numerical_feature_target_count, // 425
+            R.string.jgchat_native_duplicate_numerical_column, // 426
+            R.string.jgchat_native_numerical_tables_require_1_10000_rows_and_at_most_64_columns, // 427
+            R.string.jgchat_native_invalid_numerical_table_row, // 428
+            R.string.jgchat_native_invalid_saved_numerical_vector, // 429
+            R.string.jgchat_native_rank_deficient_or_ill_conditioned_fit_remove_redundant_constant_features_or_use_ridge, // 430
+            R.string.jgchat_native_unsupported_saved_numerical_model, // 431
+            R.string.jgchat_native_unsupported_saved_numerical_method, // 432
+            R.string.jgchat_native_invalid_saved_feature_scaling, // 433
+            R.string.jgchat_native_invalid_saved_neighbors, // 434
+            R.string.jgchat_native_invalid_saved_neighbor_count, // 435
+            R.string.jgchat_native_invalid_saved_coefficients, // 436
+            R.string.jgchat_native_numerical_output_exceeds_20000_rows_2_mib_reduce_rows_or_targets_no_partial_result_sa, // 437
+            R.string.jgchat_native_a_target_cannot_also_be_a_predictor, // 438
+            R.string.jgchat_native_a_target_cannot_serve_as_its_own_baseline, // 439
+            R.string.jgchat_native_train_before_must_be_less_than_calibrate_before, // 440
+            R.string.jgchat_native_coverage_must_be_0_5_0_99_or_null, // 441
+            R.string.jgchat_native_ridge_needs_lambda_in_0_1000000_and_neighbors_null, // 442
+            R.string.jgchat_native_knn_needs_predictors_neighbors_1_100_and_lambda_null, // 443
+            R.string.jgchat_native_linear_needs_lambda_null_and_neighbors_null, // 444
+            R.string.jgchat_native_label_end_column_precedes_its_origin_order_correct_target_availability_times, // 445
+            R.string.jgchat_native_too_few_complete_training_rows_after_purging_linear_needs_more_than_features_1_every_, // 446
+            R.string.jgchat_native_evaluation_exceeds_20000_rows_use_fewer_rows_or_targets, // 447
+            R.string.jgchat_native_invalid_saved_uncertainty_calibration, // 448
+            R.string.jgchat_native_invalid_saved_interval_radius, // 449
+            R.string.jgchat_native_prediction_exceeds_20000_output_rows_reduce_input_rows, // 450
+            R.string.jgchat_native_max_gap_must_be_positive_or_null, // 451
+            R.string.jgchat_native_plot_needs_1_8_column_series, // 452
+            R.string.jgchat_native_line_band_table_x_must_increase_strictly_order_filter_pivot_it_with_sql, // 453
+            R.string.jgchat_native_saved_table_plot_exceeds_1000_total_points_explicitly_reduce_aggregate_in_sql, // 454
+            R.string.jgchat_native_codex_http_detail, // 455
+            R.string.jgchat_native_https_cancelled, // 456
+            R.string.jgchat_native_https_response_processing_failed, // 457
+            R.string.jgchat_native_https_transport_failed, // 458
+            R.string.jgchat_native_https_unexpected_failure, // 459
+            R.string.jgchat_native_native_https_unexpected_failure, // 460
+        };
+        // END GENERATED NATIVE RESOURCES
+        static int resourceId(int id) {
+            return id > 0 && id < RESOURCES.length ? RESOURCES[id] : R.string.jgchat_native_chat_operation_failed;
+        }
+        String text(Context context) {
+            try {
+                int resource = resourceId(id);
+                if (id <= 0 || id >= RESOURCES.length) return context.getString(resource);
+                if (format == 1 && args.length == 1)
+                    return context.getString(R.string.jgchat_label_detail, context.getString(resource), args[0]);
+                if (format == 2 && args.length == 2)
+                    return context.getString(R.string.jgchat_progress_range, context.getString(resource), args[0], args[1]);
+                if (format != 0) return context.getString(R.string.jgchat_native_chat_operation_failed);
+                return args.length == 0 ? context.getString(resource) : context.getString(resource, (Object[]) args);
+            } catch (java.util.IllegalFormatException malformedTranslation) {
+                return context.getString(R.string.jgchat_native_chat_operation_failed);
+            }
+        }
+        static String text(Context context, JSONObject object) {
+            if (object == null) return "";
+            JSONArray values = object.optJSONArray("args");
+            int count = values == null ? 0 : values.length();
+            if (count > 8) return context.getString(R.string.jgchat_native_chat_operation_failed);
+            String[] args = new String[count];
+            for (int i = 0; i < count; ++i) args[i] = values.optString(i, "");
+            return new NativeMessage(object.optInt("id"), object.optInt("format"), args).text(context);
+        }
+        static String exportLabels(Context context) throws JSONException {
+            JSONObject labels = new JSONObject();
+            Configuration config = context.getResources().getConfiguration();
+            @SuppressWarnings("deprecation")
+            Locale locale = Build.VERSION.SDK_INT >= 24 ? config.getLocales().get(0) : config.locale;
+            labels.put("language", locale.toLanguageTag());
+            labels.put("title", context.getString(R.string.jgchat_export_title));
+            labels.put("you", context.getString(R.string.jgchat_you));
+            labels.put("assistant", context.getString(R.string.jgchat_chatgpt));
+            labels.put("source", context.getString(R.string.jgchat_export_source));
+            labels.put("plot", context.getString(R.string.jgchat_plot));
+            labels.put("plot_unavailable", context.getString(R.string.jgchat_export_plot_unavailable));
+            labels.put("plot_text_note", context.getString(R.string.jgchat_export_plot_text_note));
+            labels.put("generated_files", context.getString(R.string.jgchat_export_generated_files));
+            labels.put("separate_contents", context.getString(R.string.jgchat_export_separate_contents));
+            labels.put("pending", context.getString(R.string.jgchat_export_pending));
+            labels.put("incomplete", context.getString(R.string.jgchat_export_incomplete));
+            labels.put("answer_heading", context.getString(R.string.jgchat_answer_heading));
+            labels.put("effort_default", context.getString(R.string.jgchat_reasoning_default_short));
+            labels.put("effort_none", context.getString(R.string.jgchat_reasoning_none_short));
+            labels.put("effort_minimal", context.getString(R.string.jgchat_reasoning_minimal_short));
+            labels.put("effort_low", context.getString(R.string.jgchat_reasoning_low_short));
+            labels.put("effort_medium", context.getString(R.string.jgchat_reasoning_medium_short));
+            labels.put("effort_high", context.getString(R.string.jgchat_reasoning_high_short));
+            labels.put("effort_xhigh", context.getString(R.string.jgchat_reasoning_xhigh_short));
+            labels.put("effort_max", context.getString(R.string.jgchat_reasoning_max_short));
+            return labels.toString();
+        }
+    }
 }

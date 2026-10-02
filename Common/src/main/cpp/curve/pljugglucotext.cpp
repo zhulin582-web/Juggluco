@@ -99,7 +99,7 @@ jugglucotext pltext {
 	.SD="Odchylenie standardowe: %.2f",
 	.glucose_variability="Zmienność stęż. glukozy: %.1f%%",
      .menustr0={
-		"Integr. z sys.",
+		"ChatGPT",
 		"Całe menu",
 		"Zegarek",
 		"Sensor",
@@ -127,7 +127,7 @@ jugglucotext pltext {
 		"Na głos",
 		"Pływ. wart."
 		},
-	.menustr2= {"Ostatni odczyt",
+	.menustr2= {"Integr. z sys.",
 	"Skany",
 	"Strumień",
 	"Historia",

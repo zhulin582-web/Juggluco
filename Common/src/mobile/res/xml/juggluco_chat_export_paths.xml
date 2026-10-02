@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only files deliberately prepared by Save/Share may receive URI grants. -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="chat_exports" path="juggluco-chat-exports/" />
+</paths>

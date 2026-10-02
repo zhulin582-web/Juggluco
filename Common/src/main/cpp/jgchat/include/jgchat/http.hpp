@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "ui_messages.hpp"
 #include <atomic>
 #include <chrono>
 #include <functional>
@@ -27,7 +28,11 @@ struct HttpResponse {
     long status = 0;
     std::string body;
     std::string error;
+    UiMessage ui_error{};
 };
+inline HttpResponse http_failure(UiMessage message) {
+    return {0, {}, ui_diagnostic(message), std::move(message)};
+}
 using HttpClient = std::function<HttpResponse(const HttpRequest&, const std::atomic_bool&)>;
 HttpClient native_https();
 HttpClient curl_https();

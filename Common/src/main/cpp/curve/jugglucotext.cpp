@@ -101,7 +101,7 @@ const jugglucotext engtext {
 	.SD="SD: %.2f",
 	.glucose_variability="Glucose variability: %.1f%%",
      .menustr0={
-		"System UI",
+		"ChatGPT",
 		"Menus",
 		"Watch",
 		"Sensor",
@@ -129,7 +129,7 @@ const jugglucotext engtext {
 		"Talk",
 		"Float"
 		},
-	.menustr2= {"Last Scan",
+	.menustr2= {"System UI",
 	"Scans",
 	"Stream",
 	"History",

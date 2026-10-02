@@ -9,15 +9,15 @@
     android:textAlignment="textStart"
     >
 
-    <CheckBox
-        android:id="@+id/systemui"
+    <Button
+        android:id="@+id/chatgpt"
         android:layout_width="wrap_content"
         android:layout_height="0dp"
         android:layout_row="0"
         android:layout_column="0"
         android:layout_columnWeight="1"
         android:layout_rowWeight="1"
-        android:text="@string/system_ui" />
+        android:text="@string/jgchat_chatgpt" />
     <CheckBox
         android:id="@+id/menus"
         android:layout_width="wrap_content"
@@ -177,15 +177,15 @@
 
         />
 
-    <Button
-        android:id="@+id/lastscan"
+    <CheckBox
+        android:id="@+id/systemui"
         android:layout_width="wrap_content"
         android:layout_height="0dp"
         android:layout_row="0"
         android:layout_column="4"
         android:layout_columnWeight="1"
         android:layout_rowWeight="1"
-        android:text="@string/last_scan" />
+        android:text="@string/system_ui" />
     <CheckBox
         android:id="@+id/scans"
         android:layout_width="wrap_content"

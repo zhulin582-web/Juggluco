@@ -110,7 +110,7 @@ jugglucotext rutext {
 	.SD="SD: %.2f",
 	.glucose_variability="Вариабельность глюкозы: %.1f%%",
      .menustr0={
-		"System UI",
+		"ChatGPT",
 		"Меню",
 		"Часы",
 		"Датчик",
@@ -136,7 +136,7 @@ jugglucotext rutext {
 		"Озвучка",
 		"Плав. глюк."
 		},
-	.menustr2= {"Скан",
+	.menustr2= {"System UI",
 	"Сканы",
 	"Поток",
 	"История",

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "jgchat/ui_messages.hpp"
 #include "jgchat/numerics.hpp"
 #include "jgchat/plot.hpp"
 #include <algorithm>
@@ -24,42 +25,42 @@ struct Budget {
     uint64_t work = 0;
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now() + std::chrono::seconds(10);
     void check(uint64_t cost = 1) {
-        if (cancel) throw std::runtime_error("Request cancelled");
+        if (cancel) throw jgchat::UiError(jgchat::UiCode::request_cancelled);
         work += cost;
         if (work > 60000000 || std::chrono::steady_clock::now() >= end)
-            throw std::runtime_error("Numerical work exceeds 10 seconds / 60 million operations; use fewer rows/features/targets");
+            throw jgchat::UiError(jgchat::UiCode::numerical_work_exceeds_10_seconds_60_million_operations_use_fewer_rows_features_targe);
     }
 };
-[[noreturn]] void bad(const char* message) { throw std::runtime_error(message); }
+[[noreturn]] void bad(UiCode message) { throw UiError(message); }
 void shape(const Json& args, std::initializer_list<const char*> keys) {
-    if (!args.is_object() || args.size() != keys.size()) bad("Invalid numerical tool arguments");
-    for (auto key : keys) if (!args.contains(key)) bad("Missing numerical tool argument");
+    if (!args.is_object() || args.size() != keys.size()) bad(UiCode::invalid_numerical_tool_arguments);
+    for (auto key : keys) if (!args.contains(key)) bad(UiCode::missing_numerical_tool_argument);
 }
 std::string text(const Json& v, std::size_t max = 128) {
-    if (!v.is_string()) bad("Numerical column/name argument must be text");
+    if (!v.is_string()) bad(UiCode::numerical_column_name_argument_must_be_text);
     const auto s = v.get<std::string>();
-    if (s.empty() || s.size() > max || s.find('\0') != std::string::npos) bad("Invalid numerical column/name length");
+    if (s.empty() || s.size() > max || s.find('\0') != std::string::npos) bad(UiCode::invalid_numerical_column_name_length);
     return s;
 }
 bool numeric(const Json& v) { return v.is_number() && std::isfinite(v.get<double>()) && std::abs(v.get<double>()) <= 1e100; }
 double real(const Json& v) {
-    if (!numeric(v)) bad("Numerical data must be finite JSON numbers within +/-1e100; prepare CSV/TSV with explicit SQL casts");
+    if (!numeric(v)) bad(UiCode::numerical_data_must_be_finite_json_numbers_within_1e100_prepare_csv_tsv_with_explicit);
     return v.get<double>();
 }
-double finite(double v) { if (!std::isfinite(v) || std::abs(v) > 1e100) bad("Numerical overflow or unstable model; rescale inputs or simplify the model"); return v; }
+double finite(double v) { if (!std::isfinite(v) || std::abs(v) > 1e100) bad(UiCode::numerical_overflow_or_unstable_model_rescale_inputs_or_simplify_the_model); return v; }
 std::vector<std::string> names(const Json& a, std::size_t min, std::size_t max) {
-    if (!a.is_array() || a.size() < min || a.size() > max) bad("Invalid numerical feature/target count");
+    if (!a.is_array() || a.size() < min || a.size() > max) bad(UiCode::invalid_numerical_feature_target_count);
     std::set<std::string> seen; std::vector<std::string> out;
     for (const auto& v : a) {
         auto s = text(v);
-        if (!seen.insert(s).second) bad("Duplicate numerical column");
+        if (!seen.insert(s).second) bad(UiCode::duplicate_numerical_column);
         out.push_back(std::move(s));
     }
     return out;
 }
 std::size_t column(const AnalysisTable& t, const std::string& name) {
     const auto it = std::find(t.columns.begin(), t.columns.end(), name);
-    if (it == t.columns.end()) throw std::runtime_error("Missing numerical table column: " + name);
+    if (it == t.columns.end()) throw UiError(UiMessage::detail(UiCode::missing_numerical_column, name));
     return it - t.columns.begin();
 }
 std::vector<std::size_t> columns(const AnalysisTable& t, const std::vector<std::string>& names) {
@@ -69,11 +70,11 @@ std::vector<std::size_t> columns(const AnalysisTable& t, const std::vector<std::
 }
 void table_ok(const AnalysisTable& t) {
     if (t.columns.empty() || t.columns.size() > 64 || t.rows.empty() || t.rows.size() > max_rows)
-        bad("Numerical tables require 1-10000 rows and at most 64 columns");
-    for (const auto& row : t.rows) if (!row.is_array() || row.size() != t.columns.size()) bad("Invalid numerical table row");
+        bad(UiCode::numerical_tables_require_1_10000_rows_and_at_most_64_columns);
+    for (const auto& row : t.rows) if (!row.is_array() || row.size() != t.columns.size()) bad(UiCode::invalid_numerical_table_row);
 }
 Vector vector(const Json& value, std::size_t size) {
-    if (!value.is_array() || value.size() != size) bad("Invalid saved numerical vector");
+    if (!value.is_array() || value.size() != size) bad(UiCode::invalid_saved_numerical_vector);
     Vector out; for (const auto& v : value) out.push_back(real(v)); return out;
 }
 struct Row { std::size_t index; double at, label_end; Vector x, y; Json baseline; };
@@ -115,7 +116,7 @@ void regress(Model& m, const std::vector<Row>& rows, double lambda, Budget& budg
         }
         largest = std::max(largest,norm);
         if (!std::isfinite(norm) || norm <= std::max(1e-12,largest*1e-10))
-            bad("Rank-deficient or ill-conditioned fit: remove redundant/constant features or use ridge regularization");
+            bad(UiCode::rank_deficient_or_ill_conditioned_fit_remove_redundant_constant_features_or_use_ridge);
         smallest = std::min(smallest,norm);
         if (pivot != k) {
             for (auto& row : a) std::swap(row[k],row[pivot]);
@@ -201,25 +202,25 @@ Json save_model(const Model& m) {
     return result;
 }
 Model load_model(const Json& data) {
-    if (!data.is_object() || data.value("schema",0) != 1) bad("Unsupported saved numerical model");
+    if (!data.is_object() || data.value("schema",0) != 1) bad(UiCode::unsupported_saved_numerical_model);
     Model m; m.method = text(data.at("method"));
-    if (m.method != "linear" && m.method != "ridge" && m.method != "knn") bad("Unsupported saved numerical method");
+    if (m.method != "linear" && m.method != "ridge" && m.method != "knn") bad(UiCode::unsupported_saved_numerical_method);
     m.features = names(data.at("features"),0,max_features); m.targets = names(data.at("targets"),1,max_targets);
     const auto p = m.features.size(), q = m.targets.size();
     m.mean = vector(data.at("mean"),p); m.scale = vector(data.at("scale"),p);
     m.minimum = vector(data.at("minimum"),p); m.maximum = vector(data.at("maximum"),p);
     m.ymean = vector(data.at("target_mean"),q);
-    for (std::size_t j = 0; j < p; ++j) if (m.scale[j] <= 0 || m.minimum[j] > m.maximum[j]) bad("Invalid saved feature scaling");
+    for (std::size_t j = 0; j < p; ++j) if (m.scale[j] <= 0 || m.minimum[j] > m.maximum[j]) bad(UiCode::invalid_saved_feature_scaling);
     if (m.method == "knn") {
         const auto& x = data.at("training_x_standardized"); const auto& y = data.at("training_y");
-        if (!p || !x.is_array() || !y.is_array() || x.empty() || x.size() > max_rows || x.size() != y.size()) bad("Invalid saved neighbors");
+        if (!p || !x.is_array() || !y.is_array() || x.empty() || x.size() > max_rows || x.size() != y.size()) bad(UiCode::invalid_saved_neighbors);
         const auto& k = data.at("neighbors");
-        if (!k.is_number_integer() || k.get<int64_t>() < 1 || k.get<int64_t>() > 100 || static_cast<uint64_t>(k.get<int64_t>()) > x.size()) bad("Invalid saved neighbor count");
+        if (!k.is_number_integer() || k.get<int64_t>() < 1 || k.get<int64_t>() > 100 || static_cast<uint64_t>(k.get<int64_t>()) > x.size()) bad(UiCode::invalid_saved_neighbor_count);
         m.neighbors = k.get<std::size_t>();
         for (std::size_t i = 0; i < x.size(); ++i) { m.x.push_back(vector(x[i],p)); m.y.push_back(vector(y[i],q)); }
     } else {
         const auto& coefficients = data.at("coefficients_standardized");
-        if (!coefficients.is_array() || coefficients.size() != q) bad("Invalid saved coefficients");
+        if (!coefficients.is_array() || coefficients.size() != q) bad(UiCode::invalid_saved_coefficients);
         for (const auto& row : coefficients) m.coefficients.push_back(vector(row,p));
     }
     return m;
@@ -248,7 +249,7 @@ struct Metrics {
 };
 void output_ok(const Json& data) {
     if (data.at("rows").size() > max_output_rows || data.dump().size() > 2*1024*1024)
-        bad("Numerical output exceeds 20000 rows / 2 MiB; reduce rows or targets. No partial result saved");
+        bad(UiCode::numerical_output_exceeds_20000_rows_2_mib_reduce_rows_or_targets_no_partial_result_sa);
 }
 Json text_schema(std::size_t max) { return {{"type","string"},{"minLength",1},{"maxLength",max}}; }
 Json nullable_text() { return {{"type",Json::array({"string","null"})},{"minLength",1},{"maxLength",128}}; }
@@ -297,27 +298,27 @@ Json fit_analysis_model(const AnalysisTable& table, const Json& args, const std:
     Model m; m.method = text(args.at("method"));
     m.features = names(args.at("features"),0,max_features); m.targets = names(args.at("targets"),1,max_targets);
     const auto p = m.features.size(), q = m.targets.size();
-    for (const auto& f : m.features) if (std::find(m.targets.begin(),m.targets.end(),f) != m.targets.end()) bad("A target cannot also be a predictor");
+    for (const auto& f : m.features) if (std::find(m.targets.begin(),m.targets.end(),f) != m.targets.end()) bad(UiCode::a_target_cannot_also_be_a_predictor);
     const auto xcols = columns(table,m.features), ycols = columns(table,m.targets);
     const auto order_name = text(args.at("order_column"));
     const auto order = column(table,order_name);
     const auto label_end = args["label_end_column"].is_null() ? order : column(table,text(args["label_end_column"]));
     const auto baseline = args["baseline_column"].is_null() ? table.columns.size() : column(table,text(args["baseline_column"]));
-    if (std::find(ycols.begin(),ycols.end(),baseline) != ycols.end()) bad("A target cannot serve as its own baseline");
+    if (std::find(ycols.begin(),ycols.end(),baseline) != ycols.end()) bad(UiCode::a_target_cannot_serve_as_its_own_baseline);
     const double train_before = real(args["train_before"]), calibrate_before = real(args["calibrate_before"]);
-    if (train_before >= calibrate_before) bad("train_before must be less than calibrate_before");
+    if (train_before >= calibrate_before) bad(UiCode::train_before_must_be_less_than_calibrate_before);
     const bool intervals = !args["coverage"].is_null();
     const double coverage = intervals ? real(args["coverage"]) : 0;
-    if (intervals && (coverage < .5 || coverage > .99)) bad("Coverage must be 0.5-0.99 or null");
+    if (intervals && (coverage < .5 || coverage > .99)) bad(UiCode::coverage_must_be_0_5_0_99_or_null);
     double lambda = 0;
     if (m.method == "ridge") {
         lambda = real(args["lambda"]);
-        if (lambda <= 0 || lambda > 1e6 || !args["neighbors"].is_null()) bad("Ridge needs lambda in (0,1000000] and neighbors=null");
+        if (lambda <= 0 || lambda > 1e6 || !args["neighbors"].is_null()) bad(UiCode::ridge_needs_lambda_in_0_1000000_and_neighbors_null);
     } else if (m.method == "knn") {
         if (!p || !args["lambda"].is_null() || !args["neighbors"].is_number_integer() ||
-            args["neighbors"].get<int64_t>() < 1 || args["neighbors"].get<int64_t>() > 100) bad("KNN needs predictors, neighbors=1-100 and lambda=null");
+            args["neighbors"].get<int64_t>() < 1 || args["neighbors"].get<int64_t>() > 100) bad(UiCode::knn_needs_predictors_neighbors_1_100_and_lambda_null);
         m.neighbors = args["neighbors"].get<std::size_t>();
-    } else if (m.method != "linear" || !args["lambda"].is_null() || !args["neighbors"].is_null()) bad("Linear needs lambda=null and neighbors=null");
+    } else if (m.method != "linear" || !args["lambda"].is_null() || !args["neighbors"].is_null()) bad(UiCode::linear_needs_lambda_null_and_neighbors_null);
     std::vector<Row> train, calibration, test;
     std::size_t invalid = 0, purged_train = 0, purged_calibration = 0;
     for (std::size_t i = 0; i < table.rows.size(); ++i) {
@@ -327,7 +328,7 @@ Json fit_analysis_model(const AnalysisTable& table, const Json& args, const std:
         for (auto col : ycols) valid = valid && numeric(cells[col]);
         if (!valid) { ++invalid; continue; }
         Row r{i,real(cells[order]),real(cells[label_end]),{},{},baseline < cells.size() && numeric(cells[baseline]) ? cells[baseline] : Json(nullptr)};
-        if (r.label_end < r.at) bad("label_end_column precedes its origin/order; correct target availability times");
+        if (r.label_end < r.at) bad(UiCode::label_end_column_precedes_its_origin_order_correct_target_availability_times);
         for (auto c : xcols) r.x.push_back(real(cells[c]));
         for (auto c : ycols) r.y.push_back(real(cells[c]));
         if (r.at < train_before) {
@@ -337,8 +338,8 @@ Json fit_analysis_model(const AnalysisTable& table, const Json& args, const std:
         } else test.push_back(std::move(r));
     }
     if (train.size() < 3 || (m.method == "linear" && train.size() <= p+1) || m.neighbors > train.size())
-        bad("Too few complete training rows after purging; linear needs more than features+1, every fit at least 3, KNN at least k");
-    if ((calibration.size()+test.size())*q > max_output_rows) bad("Evaluation exceeds 20000 rows; use fewer rows or targets");
+        bad(UiCode::too_few_complete_training_rows_after_purging_linear_needs_more_than_features_1_every_);
+    if ((calibration.size()+test.size())*q > max_output_rows) bad(UiCode::evaluation_exceeds_20000_rows_use_fewer_rows_or_targets);
     const auto by_time = [](const Row& a,const Row& b) { return a.at != b.at ? a.at < b.at : a.index < b.index; };
     for (auto* rows : {&train,&calibration,&test}) std::sort(rows->begin(),rows->end(),by_time);
     m.mean.assign(p,0); m.scale.assign(p,0); m.minimum.assign(p,1e100); m.maximum.assign(p,-1e100); m.ymean.assign(q,0);
@@ -413,9 +414,9 @@ Json predict_analysis_model(const AnalysisTable& table, const Json& saved, const
     const auto xcols = columns(table,m.features);
     const auto order = column(table,text(saved.at("order_column")));
     const auto& interval = saved.at("interval"); const auto& radii = interval.at("absolute_error_radius_by_target");
-    if (!radii.is_array() || radii.size() != m.targets.size()) bad("Invalid saved uncertainty calibration");
-    for (const auto& r : radii) if (!r.is_null() && real(r) < 0) bad("Invalid saved interval radius");
-    if (table.rows.size()*m.targets.size() > max_output_rows) bad("Prediction exceeds 20000 output rows; reduce input rows");
+    if (!radii.is_array() || radii.size() != m.targets.size()) bad(UiCode::invalid_saved_uncertainty_calibration);
+    for (const auto& r : radii) if (!r.is_null() && real(r) < 0) bad(UiCode::invalid_saved_interval_radius);
+    if (table.rows.size()*m.targets.size() > max_output_rows) bad(UiCode::prediction_exceeds_20000_output_rows_reduce_input_rows);
     Json rows = Json::array(); std::size_t invalid = 0;
     for (std::size_t i = 0; i < table.rows.size(); ++i) {
         budget.check(); const auto& cells = table.rows[i];
@@ -446,8 +447,8 @@ Json plot_analysis_table(const AnalysisTable& table, const Json& args, const std
     const auto xcol = column(table,text(args.at("x_column")));
     const bool gap_check = !args["max_gap"].is_null();
     const double max_gap = gap_check ? real(args["max_gap"]) : 0;
-    if (gap_check && max_gap <= 0) bad("max_gap must be positive or null");
-    if (!args["series"].is_array() || args["series"].empty() || args["series"].size() > 8) bad("Plot needs 1-8 column series");
+    if (gap_check && max_gap <= 0) bad(UiCode::max_gap_must_be_positive_or_null);
+    if (!args["series"].is_array() || args["series"].empty() || args["series"].size() > 8) bad(UiCode::plot_needs_1_8_column_series);
     Json series = Json::array(); std::vector<std::size_t> ycols;
     for (const auto& s : args["series"]) {
         shape(s,{"label","column"}); ycols.push_back(column(table,text(s["column"])));
@@ -456,7 +457,7 @@ Json plot_analysis_table(const AnalysisTable& table, const Json& args, const std
     std::size_t count = 0; double previous = 0; bool first = true;
     for (const auto& row : table.rows) {
         budget.check(); const auto x = real(row[xcol]);
-        if (!first && (kind == "line" || kind == "band") && x <= previous) bad("Line/band table x must increase strictly; order/filter/pivot it with SQL");
+        if (!first && (kind == "line" || kind == "band") && x <= previous) bad(UiCode::line_band_table_x_must_increase_strictly_order_filter_pivot_it_with_sql);
         if (!first && gap_check && x-previous > max_gap) {
             for (auto& s : series) s["points"].push_back({{"x",previous+(x-previous)/2},{"y",nullptr}});
             count += series.size();
@@ -466,7 +467,7 @@ Json plot_analysis_table(const AnalysisTable& table, const Json& args, const std
             if (!y.is_null()) (void)real(y);
             series[j]["points"].push_back({{"x",x},{"y",y}});
         }
-        count += series.size(); if (count > 1000) bad("Saved-table plot exceeds 1000 total points; explicitly reduce/aggregate in SQL");
+        count += series.size(); if (count > 1000) bad(UiCode::saved_table_plot_exceeds_1000_total_points_explicitly_reduce_aggregate_in_sql);
         previous = x; first = false;
     }
     Json spec; for (auto key : {"title","x_label","y_label","x_type","kind","provenance"}) spec[key] = args.at(key);

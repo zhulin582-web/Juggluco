@@ -709,7 +709,7 @@ static  bool putDescription(int allindex,juice_agent *agent,std::string_view com
                     }
                 }
              else {
-                LOGGERICE("putdescription: %s %d: Http error\n",commonLabel.data(),side);
+                LOGGERICE("putdescription: %s %d: Http error code=%d\n",commonLabel.data(),side,code);
                 sleep(20);
                 }
 

@@ -64,7 +64,7 @@ struct nfc1 {
             return;
             }
         jsize lens=env->GetArrayLength(jnfcout);
-		if(lens<(sizeof(firstnfc)+3)) {
+		if(lens<(sizeof(firstnfc)+3) || lens>sizeof(nfcbuf)) {
 			LOGGER("NFC: sizeof bytearray=%d sizeof(firstnfc)=%ld\n",lens,sizeof(firstnfc));
 			error=true;
 			return;
@@ -77,8 +77,12 @@ struct nfc1 {
 		}
 #endif
        auto *iter=nfcbuf+1;
-       while(*iter++==0xa5)
+       while(iter<nfcbuf+lens && *iter++==0xa5)
            ;
+        if(static_cast<size_t>(nfcbuf+lens-iter)<sizeof(firstnfc)) {
+            error=true;
+            return;
+            }
         nfcptr=reinterpret_cast<firstnfc*>(iter);
 		nfcptr->crc16[0]=0;
 		LOGGER("serialnumber=%s state=%d warmup=%d*5 wearduration=%d  sec_version=%hx localization=%hx puckgen=%hx firmwareversion=%x producttype=%hhx\n",nfcptr->serialnumber,nfcptr->state,nfcptr->warmup,nfcptr->wearduration,
@@ -92,6 +96,13 @@ nfcptr->producttype
 	};
 
 static_assert(sizeof(firstnfc)==26);
+
+extern "C" JNIEXPORT jint JNICALL fromjava(lingoPatchSecurityVersion)(JNIEnv *env, jclass, jbyteArray patchInfo) {
+    nfc1 first(env,patchInfo);
+    if(first.error) return -1;
+    if(first.nfcptr->producttype!=9) return 0;
+    return first.nfcptr->sec_version?first.nfcptr->sec_version:-1;
+    }
 
 
 
@@ -289,7 +300,14 @@ extern "C" JNIEXPORT jstring JNICALL fromjava(interpret3NFC2)(JNIEnv *env, jclas
   const auto pin=nfc->pin;
 #endif
 	int sensindex=sensors->makelibre3sensorindex(std::string_view(first.nfcptr->serialnumber,9),acttime,pin,devaddress,now,first.nfcptr->warmup*5,first.nfcptr->wearduration);
-	SensorGlucoseData *sens=sensors->getSensorData(sensindex);
+	SensorGlucoseData *sens=sensindex>=0?sensors->getSensorData(sensindex):nullptr;
+	if(!sens) {
+        CritArSave<jlong> longreturn(env,jlongreturn);
+        longreturn.data()[0]=0LL;
+        return strreturn;
+        }
+    sens->getinfo()->lingo=first.nfcptr->producttype==9;
+    sens->getinfo()->lingoSecurityVersion=sens->isLingo()?first.nfcptr->sec_version:0;
 	sendstreaming(sens); 
 	libre3stream *streamd=new libre3stream(sensindex,sens);
     CritArSave<jlong> longreturn(env,jlongreturn);
@@ -317,4 +335,3 @@ extern "C" JNIEXPORT jint JNICALL fromjava(startTimeIDsum)(JNIEnv *env, jclass c
 
 
 #endif
-

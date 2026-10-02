@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "jgchat/ui_messages.hpp"
 #include "jgchat/chat_export.hpp"
 #include <algorithm>
 #include <array>
@@ -157,34 +158,56 @@ std::string markdown_html(std::string_view source) {
     if (code) out += "</code></pre>\n";
     return out;
 }
-std::string heading(const Json& message) {
-    if (field(message, "role") == "user") return "You";
+std::string translated(const Json& labels, const std::string& key, const char* fallback) {
+    auto value = field(labels, key.c_str());
+    return value.empty() ? fallback : value;
+}
+std::string heading(const Json& message, const Json& labels) {
+    if (field(message, "role") == "user") return translated(labels, "you", "You");
     auto name = field(message, "model_name");
     if (trim(name).empty()) name = field(message, "model_id");
-    return trim(name).empty() ? "ChatGPT" : std::string(trim(name));
+    name = trim(name).empty() ? translated(labels, "assistant", "ChatGPT") : std::string(trim(name));
+    const auto effort = message.find("reasoning_effort");
+    if (effort == message.end() || !effort->is_string()) return name;
+    auto level = effort->get<std::string>();
+    if (level.empty()) level = "default";
+    const char* suffix = level == "none" ? "N" : level == "minimal" ? "Min" : level == "low" ? "L" :
+        level == "medium" ? "M" : level == "high" ? "H" : level == "xhigh" ? "XH" :
+        level == "max" ? "Max" : level == "default" ? "D" : nullptr;
+    if (!suffix) return name;
+    auto pattern = translated(labels, "answer_heading", "%1$s · %2$s");
+    // Substitute only the template, never recursively reinterpret model names.
+    std::string result;
+    for (std::size_t i = 0; i < pattern.size();) {
+        if (pattern.compare(i, 4, "%1$s") == 0) { result += name; i += 4; }
+        else if (pattern.compare(i, 4, "%2$s") == 0) { result += translated(labels, "effort_" + level, suffix); i += 4; }
+        else result += pattern[i++];
+    }
+    return result;
 }
 }
 
 std::string render_chat_export(const Json& messages, std::string_view pending, bool busy,
-        std::string_view format, int message_index, int plot_index) {
-    if (!messages.is_array()) throw std::runtime_error("No chat is available to export");
+        std::string_view format, int message_index, int plot_index, const Json& labels) {
+    if (!messages.is_array()) throw jgchat::UiError(jgchat::UiCode::no_chat_is_available_to_export);
     if (format == "svg") {
         if (message_index < 0 || static_cast<std::size_t>(message_index) >= messages.size() || plot_index < 0)
-            throw std::runtime_error("The plot is unavailable");
+            throw jgchat::UiError(jgchat::UiCode::the_plot_is_unavailable);
         const auto& plots = array(messages[message_index], "plots");
-        if (static_cast<std::size_t>(plot_index) >= plots.size()) throw std::runtime_error("The plot is unavailable");
+        if (static_cast<std::size_t>(plot_index) >= plots.size()) throw jgchat::UiError(jgchat::UiCode::the_plot_is_unavailable);
         auto svg = field(plots[plot_index], "svg");
-        if (!svg.starts_with("<svg ") || svg.size() > 131072) throw std::runtime_error("The plot is unavailable");
+        if (!svg.starts_with("<svg ") || svg.size() > 131072) throw jgchat::UiError(jgchat::UiCode::the_plot_is_unavailable);
         return svg;
     }
-    if (format != "html" && format != "txt") throw std::runtime_error("Unsupported chat export format");
-    if (messages.empty() && pending.empty()) throw std::runtime_error("There are no messages to export");
+    if (format != "html" && format != "txt") throw jgchat::UiError(jgchat::UiCode::unsupported_chat_export_format);
+    if (messages.empty() && pending.empty()) throw jgchat::UiError(jgchat::UiCode::there_are_no_messages_to_export);
     const bool html = format == "html";
-    std::string out = html ? R"HTML(<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    const auto label = [&](const char* key, const char* fallback) { return translated(labels, key, fallback); };
+    const auto title = label("title", "Juggluco chat");
+    std::string out = html ? "<!doctype html>\n<html lang=\"" + escape(label("language", "en")) + R"HTML("><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
-<title>Juggluco chat</title><style>
+<title>)HTML" + escape(title) + R"HTML(</title><style>
 body{font:17px/1.5 system-ui,sans-serif;background:#fff;color:#202124;max-width:960px;margin:auto;padding:20px;overflow-wrap:anywhere}
 h1{font-size:1.5em}h2{font-size:1.05em}h3,h4,h5,h6{font-size:1em;margin:.7em 0}.message{border-top:1px solid #ccc;margin-top:1.5em;padding-top:.5em}
 .user{background:#f4f4f4;padding:.5em 1em}.literal,pre{white-space:pre-wrap}.note,figcaption{color:#50545b;font-size:.9em}
@@ -192,30 +215,30 @@ figure{margin:1em 0}img{width:100%;height:auto}pre{padding:12px;background:#f4f4
 blockquote{border-left:3px solid #aaa;margin:.5em 0;padding-left:1em}.bullet{padding-left:1em}.table{overflow-x:auto}
 table{border-collapse:collapse;margin:.7em 0}th,td{border:1px solid #bbb;text-align:left;padding:.4em .7em}a{color:#164b9b}
 @media print{body{max-width:none;padding:0}.message,figure{break-inside:avoid}}
-</style></head><body><h1>Juggluco chat</h1>
-)HTML" : "Juggluco chat\n=============\n";
+</style></head><body><h1>)HTML" + escape(title) + "</h1>\n" : title + "\n=============\n";
     for (const auto& message : messages) {
         const auto role = field(message, "role");
         if (role != "user" && role != "assistant") continue;
         const auto text = field(message, "text");
         if (html) {
-            out += "<section class=\"message " + std::string(role == "user" ? "user" : "answer") + "\"><h2>" + escape(heading(message)) + "</h2>\n";
+            out += "<section class=\"message " + std::string(role == "user" ? "user" : "answer") + "\"><h2>" + escape(heading(message, labels)) + "</h2>\n";
             out += role == "user" ? "<div class=\"literal\">" + escape(text) + "</div>\n" : markdown_html(text);
-        } else out += "\n" + heading(message) + "\n" + text + "\n";
+        } else out += "\n" + heading(message, labels) + "\n" + text + "\n";
         for (const auto& citation : array(message, "citations")) {
             const auto url = field(citation, "url");
             if (!web_url(url)) continue;
             const auto title = field(citation, "title");
-            if (html) out += "<p class=\"note\">Source: <a rel=\"noreferrer noopener\" href=\"" + escape(url) + "\">" + escape(title.empty() ? url : title) + "</a> — " + escape(url) + "</p>\n";
-            else out += "Source: " + (title.empty() ? "" : title + " — ") + url + "\n";
+            if (html) out += "<p class=\"note\">" + escape(label("source", "Source")) + ": <a rel=\"noreferrer noopener\" href=\"" + escape(url) + "\">" + escape(title.empty() ? url : title) + "</a> — " + escape(url) + "</p>\n";
+            else out += label("source", "Source") + ": " + (title.empty() ? "" : title + " — ") + url + "\n";
         }
         for (const auto& plot : array(message, "plots")) {
             auto caption = field(plot, "caption");
-            if (caption.empty()) caption = "Plot";
+            if (caption.empty()) caption = label("plot", "Plot");
             const auto svg = field(plot, "svg");
             if (html && svg.starts_with("<svg ") && svg.size() <= 131072)
                 out += "<figure><img alt=\"" + escape(caption) + "\" src=\"data:image/svg+xml;base64," + base64(svg) + "\"><figcaption>" + escape(caption) + "</figcaption></figure>\n";
-            else out += html ? "<p>" + escape(caption) + " (plot unavailable)</p>\n" : "Plot: " + caption + " (image included in HTML export)\n";
+            else out += html ? "<p>" + escape(caption) + " (" + escape(label("plot_unavailable", "plot unavailable")) + ")</p>\n"
+                : label("plot", "Plot") + ": " + caption + " (" + label("plot_text_note", "image included in HTML export") + ")\n";
         }
         for (const auto& bundle : array(message, "files")) {
             std::string names;
@@ -223,45 +246,47 @@ table{border-collapse:collapse;margin:.7em 0}th,td{border:1px solid #bbb;text-al
                 if (!names.empty()) names += ", ";
                 names += field(file, "name");
             }
-            const auto note = "Generated files: " + field(bundle, "title") + (names.empty() ? "" : " (" + names + ")") +
-                ". Contents are separate; save them using Saved files in Juggluco.";
+            const auto note = label("generated_files", "Generated files") + ": " + field(bundle, "title") + (names.empty() ? "" : " (" + names + ")") +
+                ". " + label("separate_contents", "Contents are separate; save them using Saved files in Juggluco.");
             out += html ? "<p class=\"note\">" + escape(note) + "</p>\n" : note + "\n";
         }
         if (html) out += "</section>\n";
-        if (out.size() > max_export) throw std::runtime_error("The chat export is too large");
+        if (out.size() > max_export) throw jgchat::UiError(jgchat::UiCode::the_chat_export_is_too_large);
     }
     if (!pending.empty()) {
-        const char* note = busy ? "Answer in progress when exported; no completed answer yet." : "No completed answer for this question.";
-        out += html ? "<section class=\"message user\"><h2>You</h2><div class=\"literal\">" + escape(pending) + "</div><p class=\"note\">" + note + "</p></section>\n"
-                    : "\nYou\n" + std::string(pending) + "\n[" + note + "]\n";
+        const auto note = busy ? label("pending", "Answer in progress when exported; no completed answer yet.")
+                               : label("incomplete", "No completed answer for this question.");
+        const auto you = label("you", "You");
+        out += html ? "<section class=\"message user\"><h2>" + escape(you) + "</h2><div class=\"literal\">" + escape(pending) + "</div><p class=\"note\">" + escape(note) + "</p></section>\n"
+                    : "\n" + you + "\n" + std::string(pending) + "\n[" + note + "]\n";
     }
     if (html) out += "</body></html>\n";
-    if (out.size() > max_export) throw std::runtime_error("The chat export is too large");
+    if (out.size() > max_export) throw jgchat::UiError(jgchat::UiCode::the_chat_export_is_too_large);
     return out;
 }
 
 std::size_t write_chat_export(int output, std::string_view contents) {
-    if (output < 0 || contents.size() > max_export) throw std::runtime_error("Cannot write the chat export");
+    if (output < 0 || contents.size() > max_export) throw jgchat::UiError(jgchat::UiCode::cannot_write_the_chat_export);
     std::size_t done = 0;
     while (done < contents.size()) {
         const auto count = ::write(output, contents.data() + done, contents.size() - done);
         if (count < 0 && errno == EINTR) continue;
-        if (count <= 0) throw std::runtime_error("Could not write the complete chat export");
+        if (count <= 0) throw jgchat::UiError(jgchat::UiCode::could_not_write_the_complete_chat_export);
         done += static_cast<std::size_t>(count);
     }
     return done;
 }
 std::size_t copy_chat_export(int input, int output) {
-    if (input < 0 || output < 0 || input == output) throw std::runtime_error("Invalid chat export descriptor");
+    if (input < 0 || output < 0 || input == output) throw jgchat::UiError(jgchat::UiCode::invalid_chat_export_descriptor);
     std::array<char, 16384> buffer{};
     std::size_t total = 0;
     for (;;) {
         const auto count = ::read(input, buffer.data(), buffer.size());
         if (count < 0 && errno == EINTR) continue;
-        if (count < 0) throw std::runtime_error("Cannot read the chat export");
+        if (count < 0) throw jgchat::UiError(jgchat::UiCode::cannot_read_the_chat_export);
         if (!count) return total;
         total += static_cast<std::size_t>(count);
-        if (total > max_export) throw std::runtime_error("The chat export is too large");
+        if (total > max_export) throw jgchat::UiError(jgchat::UiCode::the_chat_export_is_too_large);
         write_chat_export(output, {buffer.data(), static_cast<std::size_t>(count)});
     }
 }

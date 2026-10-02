@@ -3359,7 +3359,7 @@ static bool givetreatments(const char *args,int argslen, std::string_view origin
    bool carb=pret.carb;
    bool insulin=pret.insulin;
    int i=0;
-   if(settings->data()->saytreatments&&!pret.event) {
+   if(settings->data()->GiveAmounts&&!pret.event) {
       for(;i<count;) {
          auto [ind,num]=findnewestwith(numiters,basecount);
          if(!num) {

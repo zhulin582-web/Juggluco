@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "jgchat/ui_messages.hpp"
 #include "jgchat/files.hpp"
 #include <algorithm>
 #include <array>
@@ -18,8 +19,8 @@ namespace jgchat {
 namespace {
 constexpr std::size_t max_content = 48 * 1024;
 struct Fd { int fd; ~Fd() { if (fd >= 0) ::close(fd); } };
-void fail(const char* message) { throw std::runtime_error(message); }
-void check(bool ok) { if (!ok) throw std::invalid_argument("Invalid file bundle: use 1-8 text files, safe filenames, at most 48 KiB total, and an HTML entrypoint or null."); }
+void fail(UiCode message) { throw UiError(message); }
+void check(bool ok) { if (!ok) throw jgchat::UiArgumentError(jgchat::UiCode::invalid_file_bundle_use_1_8_text_files_safe_filenames_at_most_48_kib_total_and_an_htm); }
 bool filename(std::string_view name, bool system = false) {
     if (name.empty() || name.size() > 64 || name.front() == '.' || (!system && name.starts_with("jg-"))) return false;
     for (const unsigned char c : name)
@@ -84,32 +85,32 @@ std::string page(std::string_view title, std::string_view body) {
         std::string(body) + "</body></html>";
 }
 int subdirectory(int parent, const char* name) {
-    if (::mkdirat(parent, name, 0700) != 0 && errno != EEXIST) fail("Cannot create generated-file directory");
+    if (::mkdirat(parent, name, 0700) != 0 && errno != EEXIST) fail(UiCode::cannot_create_generated_file_directory);
     const int fd = ::openat(parent, name, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
-    if (fd < 0) fail("Cannot open generated-file directory");
+    if (fd < 0) fail(UiCode::cannot_open_generated_file_directory);
     return fd;
 }
 void write(int directory, const std::string& name, std::string_view text) {
     Fd file{::openat(directory, name.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600)};
-    if (file.fd < 0) fail("Cannot create generated file");
+    if (file.fd < 0) fail(UiCode::cannot_create_generated_file);
     for (std::size_t pos = 0; pos < text.size();) {
         const auto n = ::write(file.fd, text.data() + pos, text.size() - pos);
         if (n < 0 && errno == EINTR) continue;
-        if (n <= 0) fail("Cannot write generated file");
+        if (n <= 0) fail(UiCode::cannot_write_generated_file);
         pos += static_cast<std::size_t>(n);
     }
-    if (::fsync(file.fd) != 0) fail("Cannot flush generated file");
+    if (::fsync(file.fd) != 0) fail(UiCode::cannot_flush_generated_file);
 }
 std::string read(int directory, const char* name, std::size_t maximum = 16384) {
     Fd file{::openat(directory, name, O_RDONLY | O_NONBLOCK | O_CLOEXEC | O_NOFOLLOW)};
     struct stat info{};
     if (file.fd < 0 || ::fstat(file.fd, &info) || !S_ISREG(info.st_mode) || info.st_size < 0 || uint64_t(info.st_size) > maximum)
-        fail("Cannot read saved file");
+        fail(UiCode::cannot_read_saved_file);
     std::string out(static_cast<std::size_t>(info.st_size), '\0');
     for (std::size_t pos = 0; pos < out.size();) {
         const auto n = ::read(file.fd, out.data() + pos, out.size() - pos);
         if (n < 0 && errno == EINTR) continue;
-        if (n <= 0) fail("Cannot read saved file");
+        if (n <= 0) fail(UiCode::cannot_read_saved_file);
         pos += static_cast<std::size_t>(n);
     }
     return out;
@@ -123,7 +124,7 @@ public:
     PipeSignalGuard() {
         sigemptyset(&only_pipe_); sigaddset(&only_pipe_, SIGPIPE);
         if (pthread_sigmask(SIG_BLOCK, &only_pipe_, &previous_) != 0)
-            fail("Cannot prepare document write");
+            fail(UiCode::cannot_prepare_document_write);
         sigset_t pending{};
         already_pending_ = sigpending(&pending) != 0 || sigismember(&pending, SIGPIPE) == 1;
     }
@@ -146,12 +147,12 @@ public:
 };
 std::string random_id() {
     Fd random{::open("/dev/urandom", O_RDONLY | O_CLOEXEC)};
-    if (random.fd < 0) fail("Cannot generate file identifier");
+    if (random.fd < 0) fail(UiCode::cannot_generate_file_identifier);
     std::array<unsigned char, 16> bytes{};
     for (std::size_t pos = 0; pos < bytes.size();) {
         const auto n = ::read(random.fd, bytes.data() + pos, bytes.size() - pos);
         if (n < 0 && errno == EINTR) continue;
-        if (n <= 0) fail("Cannot generate file identifier");
+        if (n <= 0) fail(UiCode::cannot_generate_file_identifier);
         pos += static_cast<std::size_t>(n);
     }
     constexpr char hex[] = "0123456789abcdef";
@@ -211,9 +212,9 @@ Json prepare_files(const Json& args) {
 }
 
 FileStore::FileStore(const std::string& files_directory) {
-    if (files_directory.empty() || files_directory.front() != '/') fail("Invalid app files directory");
+    if (files_directory.empty() || files_directory.front() != '/') fail(UiCode::invalid_app_files_directory);
     Fd base{::open(files_directory.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW)};
-    if (base.fd < 0) fail("Cannot open app files directory");
+    if (base.fd < 0) fail(UiCode::cannot_open_app_files_directory);
     Fd additions{subdirectory(base.fd, "additions")};
     fd_ = subdirectory(additions.fd, "chatgpt");
 }
@@ -221,22 +222,22 @@ FileStore::~FileStore() { if (fd_ >= 0) ::close(fd_); }
 Json FileStore::save(const Json& bundles, const std::atomic_bool& cancel) {
     std::lock_guard lock(mutex_);
     check(bundles.is_array() && bundles.size() <= 4);
-    if (list().size() + bundles.size() > 64) fail("Saved-file limit reached. Delete old bundles under Web server > Upload web pages > chatgpt.");
+    if (list().size() + bundles.size() > 64) fail(UiCode::saved_file_limit_reached_delete_old_bundles_under_web_server_upload_web_pages_chatgpt);
     Json saved = Json::array();
     std::string temporary;
     try {
         for (const auto& bundle : bundles) {
-            if (cancel) fail("Request cancelled");
+            if (cancel) fail(UiCode::request_cancelled);
             const auto checked = prepare_files(bundle);
             const auto id = random_id(); temporary = ".pending-" + id;
-            if (::mkdirat(fd_, temporary.c_str(), 0700) != 0) fail("Cannot create new file bundle");
+            if (::mkdirat(fd_, temporary.c_str(), 0700) != 0) fail(UiCode::cannot_create_new_file_bundle);
             Fd directory{::openat(fd_, temporary.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
-            if (directory.fd < 0) fail("Cannot open new file bundle");
+            if (directory.fd < 0) fail(UiCode::cannot_open_new_file_bundle);
             const auto title = bundle["title"].get<std::string>();
             const auto entry = bundle["entrypoint"].is_null() ? "jg-files.html" : bundle["entrypoint"].get<std::string>();
             std::string listing = "<h1>" + escape(title) + "</h1><p>Saved by Juggluco. Use Download to save a copy.</p><ul>";
             for (const auto& file : bundle["files"]) {
-                if (cancel) fail("Request cancelled");
+                if (cancel) fail(UiCode::request_cancelled);
                 const auto name = file["name"].get<std::string>();
                 const auto& content = file["content"].get_ref<const std::string&>();
                 write(directory.fd, name, html(name) ? page(title, content) : content);
@@ -249,14 +250,14 @@ Json FileStore::save(const Json& bundles, const std::atomic_bool& cancel) {
                 {"files", checked["files"]}, {"created_at", std::time(nullptr)}};
             write(directory.fd, "jg-manifest.json", metadata.dump());
             ::fsync(directory.fd);
-            if (cancel) fail("Request cancelled");
+            if (cancel) fail(UiCode::request_cancelled);
             // IDs are unpredictable and each write is a new directory, never
             // a model-chosen path or an overwrite of a prior file.
             struct stat exists{};
             if (::fstatat(fd_, id.c_str(), &exists, AT_SYMLINK_NOFOLLOW) == 0 || errno != ENOENT)
-                fail("Generated file identifier collision");
+                fail(UiCode::generated_file_identifier_collision);
             saved.push_back(std::move(metadata));
-            if (::renameat(fd_, temporary.c_str(), fd_, id.c_str()) != 0) fail("Cannot commit generated files");
+            if (::renameat(fd_, temporary.c_str(), fd_, id.c_str()) != 0) fail(UiCode::cannot_commit_generated_files);
             temporary.clear();
         }
         ::fsync(fd_);
@@ -279,7 +280,7 @@ Json FileStore::list() const {
     // directory offset and make later listings appear empty.
     const int copy = ::openat(fd_, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     DIR* directory = copy < 0 ? nullptr : ::fdopendir(copy);
-    if (!directory) { if (copy >= 0) ::close(copy); fail("Cannot list saved files"); }
+    if (!directory) { if (copy >= 0) ::close(copy); fail(UiCode::cannot_list_saved_files); }
     Json result = Json::array();
     while (const auto* entry = ::readdir(directory)) {
         if (!bundle_id(entry->d_name) || result.size() >= 64) continue;
@@ -298,46 +299,46 @@ Json FileStore::list() const {
 }
 std::string FileStore::relative_path(const std::string& id, const std::string& file) const {
     std::lock_guard lock(mutex_);
-    if (!bundle_id(id) || !filename(file, true)) fail("Invalid saved file");
+    if (!bundle_id(id) || !filename(file, true)) fail(UiCode::invalid_saved_file);
     Fd directory{::openat(fd_, id.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
     Fd content{directory.fd < 0 ? -1 : ::openat(directory.fd, file.c_str(), O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC)};
     struct stat info{};
-    if (content.fd < 0 || ::fstat(content.fd, &info) || !S_ISREG(info.st_mode)) fail("The saved file is no longer available");
+    if (content.fd < 0 || ::fstat(content.fd, &info) || !S_ISREG(info.st_mode)) fail(UiCode::the_saved_file_is_no_longer_available);
     return "additions/chatgpt/" + id + "/" + file;
 }
 std::string FileStore::read_text(const std::string& id, const std::string& file) const {
         std::lock_guard lock(mutex_);
-        if (!bundle_id(id) || !filename(file, true)) fail("Invalid saved file");
+        if (!bundle_id(id) || !filename(file, true)) fail(UiCode::invalid_saved_file);
         Fd directory{::openat(fd_, id.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
         const auto manifest = Json::parse(read(directory.fd, "jg-manifest.json"));
         if (!manifest.is_object() || manifest.value("id", "") != id ||
             !manifest.contains("files") || !manifest["files"].is_array() || manifest["files"].size() > 8)
-            fail("Invalid saved-file manifest");
+            fail(UiCode::invalid_saved_file_manifest);
         bool listed = file == "jg-api.js";
         for (const auto& item : manifest["files"])
             if (item.is_object() && item.contains("name") && item["name"] == file) listed = true;
-        if (!listed) fail("File is not part of this generated bundle");
+        if (!listed) fail(UiCode::file_is_not_part_of_this_generated_bundle);
         // Snapshot before writing and release the lock before slow provider I/O.
         return read(directory.fd, file.c_str(), 128 * 1024);
 }
 std::size_t FileStore::copy_to_fd(const std::string& id, const std::string& file, int output) const {
     const auto bytes = read_text(id, file);
     const int flags = fcntl(output, F_GETFL);
-    if (flags < 0 || (flags & O_ACCMODE) == O_RDONLY) fail("Document is not writable");
+    if (flags < 0 || (flags & O_ACCMODE) == O_RDONLY) fail(UiCode::document_is_not_writable);
     PipeSignalGuard signals;
     for (std::size_t pos = 0; pos < bytes.size();) {
         const auto count = ::write(output, bytes.data() + pos, bytes.size() - pos);
         if (count < 0 && errno == EINTR) continue;
         if (count < 0 && errno == EPIPE) signals.broken_pipe();
-        if (count <= 0) fail("Could not write the selected document");
+        if (count <= 0) fail(UiCode::could_not_write_the_selected_document);
         pos += static_cast<std::size_t>(count);
     }
     struct stat info{};
-    if (fstat(output, &info) != 0) fail("Could not check the selected document");
+    if (fstat(output, &info) != 0) fail(UiCode::could_not_check_the_selected_document);
     if (S_ISREG(info.st_mode)) {
         int flushed;
         do { flushed = fsync(output); } while (flushed < 0 && errno == EINTR);
-        if (flushed < 0) fail("Could not finish writing the selected document");
+        if (flushed < 0) fail(UiCode::could_not_finish_writing_the_selected_document);
     }
     return bytes.size();
 }

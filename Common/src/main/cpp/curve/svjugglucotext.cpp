@@ -71,7 +71,7 @@ jugglucotext svtext {
 	.SD="SD: %.2f",
 	.glucose_variability="Glukos varians: %.1f%%",
      .menustr0={
-		"System UI",
+		"ChatGPT",
 		"Menyer",
 		"Klocka",
 		"Sensor",
@@ -101,7 +101,7 @@ jugglucotext svtext {
 		},
 
 	.menustr2= {
-    "Senaste skanning",
+    "System UI",
     "Skanningar",
     "Strömmade",
     "Historik",

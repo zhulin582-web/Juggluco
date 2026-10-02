@@ -1930,6 +1930,12 @@ te verbinden, kun je de Freestyle Libre3 sensor niet meer scannen.</p>
 <p>Het Libreview-account-ID-nummer kan ook worden <a class="western" href="https://www.juggluco.nl/Juggluco/libre3/convertUUID.html">omgezet</a>
 vanuit de UUID die wordt weergegeven in de adresbalk van
 Libreview-rapporten en handmatig worden ingevoerd in Juggluco.</p>
+<p><b>Nieuwe Libre-app</b>: Verstuurt hetzelfde nummer als de nieuwe Libre-app
+om een ​​Libre 3-sensor te activeren. Dit nummer wordt rechts van deze instelling weergegeven (indien bekend; anders -1). De nieuwe Libre-app van Abbott
+(<a class="western" href="https://play.google.com/store/apps/details?id=com.abbott.adc.freestyle.libre.nl">https://play.google.com/store/apps/details?id=com.abbott.adc.freestyle.libre.nl</a>)
+gebruikt een ander nummer dan de Libre 3-app van Abbott bij het activeren van sensoren; voorheen kon Juggluco
+geen sensoren overnemen die met die app waren geactiveerd, maar nu
+zou dat wel mogelijk moeten zijn.</p>
 <p>Gegevens van Sibionics- en Dexcom-sensoren worden niet naar
 Libreview verzonden.</p>
 <p>Als je gegevens in Libreview-opmaak wilt opslaan, kun je dat ook doen via linker midden → <a href="https://www.juggluco.nl/Jugglucohelp/nl/helpexport.html">Export</a> of via de <a  href="https://www.juggluco.nl/Juggluco/webserver.html#libreview">webserver</a> in Juggluco. Glucosewaarden van Dexcom- en Sibionics-sensoren zijn ook opgenomen.</p>
@@ -3255,6 +3261,67 @@ als de situatie aanhoudt? Bijvoorbeeld: als er om 7:30 uur een alarm
 voor een lage bloedglucosewaarde afgaat en er 20 minuten zijn
 ingesteld, en de bloedglucosewaarde blijft laag, dan wordt het alarm
 pas na 7:50 uur opnieuw geactiveerd.</p>
+<p><br/>
+<br/>
+
+</p>
+]]>
+</string>
+<string name="chatgpthelp" >
+<![CDATA[
+<p><a href="https://www.juggluco.nl/Jugglucohelp/nl/index.html">index</a></p><p><a href="https://www.juggluco.nl/Jugglucohelp/de/chatgpthelp.html">de</a>&emsp;&emsp;<a href="https://www.juggluco.nl/Jugglucohelp/nl/chatgpthelp.html">nl</a>&emsp;&emsp;<a href="https://www.juggluco.nl/Jugglucohelp/chatgpthelp.html?lang=en">en</a>&emsp;&emsp;</p><h1 class="western">ChatGPT</h1>
+<p style="line-height: 100%; margin-bottom: 0cm">Juggluco 11.3.0 en
+latere versies gebruiken de Codex-interface om gebruikers met ChatGPT
+te laten communiceren. Je moet eerst \'<i>Aanmelden met een
+apparaatcode inschakelen voor Codex, Excel, PowerPoint en Word</i> \'
+in de ChatGPT-instellingen, onderaan bij \'<i>Beveiliging en
+aanmeld</i><i>en</i>\'. Daarna kun je Juggluco toestaan ​​om in te
+loggen via de standaard Codex OpenAI-aanmelding.</p>
+<p style="line-height: 100%; margin-bottom: 0cm">ChatGPT krijgt
+alleen leestoegang tot de gegevens van Juggluco. Je kunt er vragen
+aan stellen en het kan op de volgende manieren antwoorden genereren:</p>
+<ul>
+	<li><p style="margin-bottom: 0cm; line-height: 100%">Een
+	tekstantwoord;</p></li>
+	<li><p style="margin-bottom: 0cm; line-height: 100%">Een curve die
+	bepaalde gegevens weergeeft;</p></li>
+	<li><p style="margin-bottom: 0cm; line-height: 100%">Gegevens kunnen
+	in een bestand worden opgeslagen;</p></li>
+	<li><p style="margin-bottom: 0cm; line-height: 100%">Pagina \'s
+	worden toegevoegd aan de webserver in Juggluco, zodat ChatGPT
+	aanvullingen op de webserver kan maken als je een niet-standaard
+	verzoek hebt voor de weergave van gegevens.</p></li>
+</ul>
+<p style="line-height: 100%; margin-bottom: 0cm"><br/>
+
+</p>
+<p style="line-height: 100%; margin-bottom: 0cm">ChatGPT kan de
+volgende gegevens ophalen:</p>
+<ul>
+	<li><p style="margin-bottom: 0cm; line-height: 100%">Sensoren en
+	sensortypen;</p></li>
+	<li><p style="margin-bottom: 0cm; line-height: 100%">Sensorgegevens:
+	stream, history en scans;</p></li>
+	<li><p style="margin-bottom: 0cm; line-height: 100%">Ingevoerde
+	getallen (hoeveelheden);</p></li>
+	<li><p style="margin-bottom: 0cm; line-height: 100%">Maaltijden;</p></li>
+	<li><p style="margin-bottom: 0cm; line-height: 100%">Door de
+	gebruiker gedefinieerde ingrediënten;</p></li>
+	<li><p style="margin-bottom: 0cm; line-height: 100%">De
+	voedseldatabase in Juggluco;</p></li>
+	<li><p style="margin-bottom: 0cm; line-height: 100%">Kent veel
+	instellingen in de app: alarmen, herinneringen, spiegel,
+	instellingen van de glucosemeter, enz.</p></li>
+</ul>
+<p style="line-height: 100%; margin-bottom: 0cm"><br/>
+
+</p>
+<p style="line-height: 100%; margin-bottom: 0cm">ChatGPT kan worden
+gebruikt om de gegevens in Juggluco anders weer te geven en om iets
+te zoeken of te berekenen. Je kunt ook om hulp vragen met betrekking
+tot Juggluco of iets vertellen over je diabetesmanagement, maar ik
+denk niet dat je er iets nieuws van leert als je het om hulp vraagt
+​​met je diabetesmanagement.</p>
 <p><br/>
 <br/>
 

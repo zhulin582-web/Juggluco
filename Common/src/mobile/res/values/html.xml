@@ -1738,16 +1738,15 @@ glucose data and amounts to Libreview.
 <p style="line-height: 100%; margin-bottom: 0cm">Like the Librelink
 app, it sends data from the last 89 days to Libreview. 
 </p>
-<p style="margin-bottom: 0cm; line-height: 100%"><span lang="en-US">To
+<p style="line-height: 100%; margin-bottom: 0cm"><span lang="en-US">To
 make use of this service, you need to create a Libreview account at
 <a class="western" href="https://libreview.com/">https://libreview.com</a>
 and specify its E-Mail address and password here.</span> <span lang="en-US">Don\'t
 send data covering the same period to the same LibreView account from
-more than one source (for example from both the Libre</span><span lang="en-US">l</span><span lang="en-US">ink
-app and Juggluco). You can delete existing devices on Libre</span><span lang="en-US">v</span><span lang="en-US">iew
-under Account Settings → My devices. </span><span lang="en-US">Alternatively,
-you can </span><span lang="en-US">create a new Libre</span><span lang="en-US">v</span><span lang="en-US">iew
-account.</span></p>
+more than one source (for example from both the Librelink app and
+Juggluco). You can delete existing devices on Libreview under Account
+Settings → My devices. Alternatively, you can create a new
+Libreview account.</span></p>
 <p style="line-height: 100%; margin-bottom: 0cm"><span lang="en-US">To
 turn it on, you also need to check &quot;</span><span lang="en-US"><i><b>Send
 to libreview</b></i></span><span lang="en-US"><i>&quot;</i></span><span lang="en-US">.
@@ -1768,7 +1767,7 @@ instead of <a class="western" href="https://libreview.com/">https://libreview.co
 This only applies to Libre 2 sensors. Libre 3 sensors can only be
 used with libreview.com, because no Russian Abbott Libre 3 app
 exists.</p>
-<p style="margin-bottom: 0cm; line-height: 100%"><b>Immediate</b>:
+<p style="line-height: 100%; margin-bottom: 0cm"><b>Immediate</b>:
 Send glucose values to Libreview immediately when they arrive from
 Libre 2 or 3 sensors. This is only useful in combination with
 LibreLinkUp. To make use of it you need to add a LibrelinkUp
@@ -1777,7 +1776,7 @@ connection to this Libreview account in one of Abbott\'s Libre apps.
 <a class="western" href="https://www.juggluco.nl/Juggluco/libre3/patched.html">patched
 Libre 3 app</a>.) 
 </p>
-<p style="margin-bottom: 0cm; line-height: 100%">Sometimes the value
+<p style="line-height: 100%; margin-bottom: 0cm">Sometimes the value
 isn\'t immediately visible because LibreLinkUp doesn\'t refresh its
 display automatically. Be careful, LibreLinkUp can show stale values:
 if you tap the graph, it displays an older reading rather than the
@@ -1805,7 +1804,7 @@ the stream values are more extreme, Juggluco is somewhat more
 negative: lower time in range, larger variability. Also <i>time
 sensor active</i> is smaller according to Juggluco; it counts every
 missing stream value.</p>
-<p style="margin-bottom: 0cm; line-height: 100%">Juggluco can be
+<p style="line-height: 100%; margin-bottom: 0cm">Juggluco can be
 connected with multiple sensors at the same time, while Librelink
 only handles one sensor at a time. Juggluco also sends data from only
 one sensor at a time to Libreview. It does this by first sending the
@@ -1830,6 +1829,12 @@ account.
 <p>The Libreview account ID number can also be <a class="western" href="https://www.juggluco.nl/Juggluco/libre3/convertUUID.html">converted</a>
 from the UUID displayed in the address bar of Libreview reports and
 entered manually in Juggluco.</p>
+<p><b>New Libre app</b>: Sends the same number as the new Libre app
+to activate a Libre 3 sensor. This number is displayed right of this setting, if it is known, -1 otherwise. Abbotts new Libre app
+(<a class="western" href="https://play.google.com/store/apps/details?id=com.abbott.adc.freestyle.libre.us">https://play.google.com/store/apps/details?id=com.abbott.adc.freestyle.libre.us</a>)
+uses an other number than Abbotts Libre 3 app when activating sensors, previously Juggluco
+couldn’t take over sensors activated with that app, but now that
+should be possible.</p>
 <p>Data from Sibionics and Dexcom sensors is not sent to Libreview.</p>
 <p>If you want to save data in Libreview format, you can also do that
 in left middle menu→<a class="western" href="https://www.juggluco.nl/Jugglucohelp/helpexport.html">Export</a>
@@ -3350,6 +3355,66 @@ condition continues. For example when a low glucose alarm went off at
 the alarm is only generated again after 7:50.</p>
 <p><br/>
 <br/>
+
+</p>
+]]>
+</string>
+<string name="chatgpthelp" >
+<![CDATA[
+<p><a href="https://www.juggluco.nl/Jugglucohelp/index.html">index</a></p><p><a href="https://www.juggluco.nl/Jugglucohelp/de/chatgpthelp.html">de</a>&emsp;&emsp;<a href="https://www.juggluco.nl/Jugglucohelp/nl/chatgpthelp.html">nl</a>&emsp;&emsp;<a href="https://www.juggluco.nl/Jugglucohelp/chatgpthelp.html?lang=en">en</a>&emsp;&emsp;</p><h1 class="western">
+ChatGPT</h1>
+<p style="line-height: 100%; margin-bottom: 0in">Juggluco 11.3.0 and
+later use the Codex interface to allow users to talk to ChatGPT. You
+first need to “<i>Enable device code sign-in for Codex, Excel,
+PowerPoint, and Word</i>” in the ChatGPT settings, at the bottom of
+“<i>Security and Login</i>”. Thereafter, you can allow Juggluco
+to login via the standard Codex OpenAI login.</p>
+<p style="line-height: 100%; margin-bottom: 0in">ChatGPT gets
+read-only access Juggluco’s data. You can ask it questions, and it
+can generate answers in the following ways:</p>
+<ul>
+	<li><p style="margin-bottom: 0in; line-height: 100%">A text answer;</p></li>
+	<li><p style="margin-bottom: 0in; line-height: 100%">A curve
+	displaying certain data;</p></li>
+	<li><p style="margin-bottom: 0in; line-height: 100%">Data can be
+	saved in a file;</p></li>
+	<li><p style="line-height: 100%; margin-bottom: 0in"><span lang="en-US">P</span><span lang="en-US">ages
+	</span><span lang="en-US">added </span><span lang="en-US">to the web
+	server in Juggluco, so you can let ChatGPT make additions to the web
+	server if you have non-stan</span><span lang="en-US">dard</span><span lang="en-US">
+	request for the display of data.</span></p></li>
+</ul>
+<p style="line-height: 100%; margin-bottom: 0in"><br/>
+
+</p>
+<p style="line-height: 100%; margin-bottom: 0in">ChatGPT can retrieve
+the following data:</p>
+<ul>
+	<li><p style="margin-bottom: 0in; line-height: 100%">Sensors and
+	sensor types;</p></li>
+	<li><p style="margin-bottom: 0in; line-height: 100%">Sensor data:
+	stream, history and scans;</p></li>
+	<li><p style="margin-bottom: 0in; line-height: 100%">Entered numbers
+	(amounts);</p></li>
+	<li><p style="margin-bottom: 0in; line-height: 100%">Meals;</p></li>
+	<li><p style="margin-bottom: 0in; line-height: 100%">User defined
+	ingredients;</p></li>
+	<li><p style="margin-bottom: 0in; line-height: 100%">The food
+	database in Juggluco;</p></li>
+	<li><p style="margin-bottom: 0in; line-height: 100%">Knows of a lot
+	of settings in the app: Alarms, reminders, mirror, glucose meter
+	settings etc,</p></li>
+</ul>
+<p style="line-height: 100%; margin-bottom: 0in"><br/>
+
+</p>
+<p style="line-height: 100%; margin-bottom: 0in">ChatGPT can be used
+to represent the data in Juggluco differently and to find or
+calculate something. You can also ask for help with Juggluco or tell
+it something about your diabetes management, but I don’t think that
+you will learn something new, when you ask it for help with your
+diabetes management.</p>
+<p style="line-height: 100%; margin-bottom: 0in"><br/>
 
 </p>
 ]]>

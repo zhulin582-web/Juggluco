@@ -78,6 +78,9 @@ public class Libre3GattCallback extends SuperGattCallback {
     private boolean isServicesDiscovered = false;
     private final long sensorptr;
     private long securityContext=0L;
+    // Zero selects the existing Libre 3 implementation; Lingo uses JCA crypto.
+    private int lingoSecurityVersion=0;
+    private LingoSKB lingoskb=null;
 private final Queue<byte[]> sendqueue = new ConcurrentLinkedQueue<byte[]>();
 private int    lastEventReceived=0;
     private BluetoothGattCharacteristic gattCharPatchDataControl = null;
@@ -104,6 +107,7 @@ synchronized void free() {
     {if(doLog) {Log.i(LOG_ID, SerialNumber + ": "+"free");};};
     var security=securityContext;
     securityContext=0L;
+    lingoskb=null;
     Natives.libre3FreeSecurityContext(security);
     var tmp=cryptptr;
     cryptptr=0L;
@@ -659,7 +663,11 @@ private void mknonceback() {
 
 
 
-var encrypted = Natives.libre3EncryptChallengeReply(securityContext,nonce1,uit);
+var encrypted = lingoskb!=null ? lingoskb.encrypt(nonce1,uit) : Natives.libre3EncryptChallengeReply(securityContext,nonce1,uit);
+    if(encrypted==null || encrypted.length!=40) {
+        recover(mBluetoothGatt,"challenge encryption failed",false,0L);
+        return;
+        }
 
 
 
@@ -679,7 +687,11 @@ private void challenge67() {
     byte[] nonce=new byte[7];
     arraycopy(rdtData,0,first,0,60);
     arraycopy(rdtData,60,nonce,0,7);
-    byte[] decr=Natives.libre3DecryptChallengeResponse(securityContext,nonce,first);
+    byte[] decr=lingoskb!=null ? lingoskb.decrypt(nonce,first) : Natives.libre3DecryptChallengeResponse(securityContext,nonce,first);
+    if(decr==null || decr.length!=56) {
+        recover(mBluetoothGatt,"challenge authentication failed",false,0L);
+        return;
+        }
     Log.showbytes("challenge67 decr",decr);
     var backr2=copyOfRange(decr,0,16);
     if(!java.util.Arrays.equals(r2,backr2)) {
@@ -696,10 +708,18 @@ private void challenge67() {
     var kEnc=copyOfRange(decr,32,48);
     var ivEnc=copyOfRange(decr,48,56);
 //    byte[] AuthKey=KEYSCrypto.exportAuthorizationKey();
-    byte[] savedAuthorization=Natives.libre3ExportSavedAuthorization(securityContext);
+    byte[] savedAuthorization=lingoskb!=null ? lingoskb.exportAuthorizationKey() : Natives.libre3ExportSavedAuthorization(securityContext);
+    if(savedAuthorization==null || savedAuthorization.length!=149) {
+        recover(mBluetoothGatt,"authorization export failed",false,0L);
+        return;
+        }
     Log.showbytes("challenge67 savedAuthorization",savedAuthorization);
     //securityContext=new BCrypt(kEnc,ivEnc);
     cryptptr=initcrypt(cryptptr,kEnc,ivEnc);
+    if(cryptptr==0L) {
+        recover(mBluetoothGatt,"data cipher initialization failed",false,0L);
+        return;
+        }
     Natives.setLibre3kAuth(sensorptr,savedAuthorization);
     // A newly scanned sensor can now be provisioned without retaining this GATT.
     SensorLifecycle.changed();
@@ -719,7 +739,7 @@ private void challenge67() {
  * the user wants to hand ownership to Garmin.
  */
 public synchronized byte[] getGarminProvisioningSecret() {
-    if(dataptr==0L) return null;
+    if(dataptr==0L || Natives.getLingoSecurityVersion(sensorptr)!=0) return null;
     if(!isWearable) {
         byte[] context=securityContext==0L ? null :
                 Natives.libre3ExportChallengeContext(securityContext);
@@ -752,7 +772,8 @@ if(!isWearable) {
         dataptr=Natives.getdataptr(serial);
         if(dataptr==0L || Natives.getLibreVersion(dataptr)!=3) return null;
         long sensorptr=Natives.getsensorptr(dataptr);
-        if(sensorptr==0L || !Natives.activeSensor(sensorptr)) return null;
+        if(sensorptr==0L || !Natives.activeSensor(sensorptr) ||
+                Natives.getLingoSecurityVersion(sensorptr)!=0) return null;
         byte[] saved=Natives.getLibre3kAuth(sensorptr), pin=Natives.getpin(sensorptr);
         if(saved==null || pin==null || pin.length!=4) return null;
         security=Natives.libre3BeginSecurityHandshake(0L);
@@ -878,7 +899,13 @@ private boolean sendSecurityCommand(byte b) {
 private int commandphase=1;
 private void setCertificate140() {
     {if(doLog) {Log.i(LOG_ID, SerialNumber + ": "+"setCertificate140");};};
-    cryptolib.setPatchCertificate(securityContext,rdtData);
+    if(lingoskb!=null) {
+        if(!lingoskb.setPatchCertificate(rdtData)) {
+            recover(mBluetoothGatt,"Lingo sensor certificate verification failed",false,0L);
+            return;
+            }
+        }
+    else cryptolib.setPatchCertificate(securityContext,rdtData);
 //    Libre3Emulator.captureCertificate(SerialNumber,rdtData);
     if(sendSecurityCommand( (byte)0x0D)) {
         commandphase=4;
@@ -887,7 +914,7 @@ private void setCertificate140() {
 private boolean    generateKAuth(byte[] input) {
     {if(doLog){showbytes(LOG_ID+ " "+SerialNumber +" generateKAuth",input);};}
     //Saves something?
-    return Natives.libre3DeriveAuthorizationRoot(securityContext,input)==1;
+    return lingoskb!=null ? lingoskb.generateKAuth(input) : (Natives.libre3DeriveAuthorizationRoot(securityContext,input)==1);
     }
 private boolean setCertificate65() {
     {if(doLog) {Log.i(LOG_ID, SerialNumber + ": "+"setCertificate65");};};
@@ -928,7 +955,9 @@ final private boolean notsuspended=true;
 
 private    void save_history(byte[] value) {
     byte[] olddec=intDecrypt(cryptptr,4, value);
-        Natives.saveLibre3History(this.sensorptr, olddec);
+    if(lingoSecurityVersion!=0)
+        Natives.saveLingoHistory(this.sensorptr, olddec);
+    else Natives.saveLibre3History(this.sensorptr, olddec);
     }
 @Override 
 public synchronized void onCharacteristicChanged(BluetoothGatt bluetoothGatt, BluetoothGattCharacteristic bluetoothGattCharacteristic) {
@@ -1017,7 +1046,9 @@ private    void fast_data(byte[] encryp) {
             info("fast_data decrypt went wrong"); 
             dodisconnect(mBluetoothGatt); 
         } else {
-            Natives.saveLibre3fastData(sensorptr, decr);
+            if(lingoSecurityVersion!=0)
+                Natives.saveLingoFastData(sensorptr, decr);
+            else Natives.saveLibre3fastData(sensorptr, decr);
         }
     }
 
@@ -1028,6 +1059,12 @@ private void onConnectGatt() {
     isPreAuthorized=false;
     }
 private synchronized boolean initSecurityKeys(byte[] savedAuthorization,int level) {
+    if(lingoSecurityVersion!=0) {
+        if(lingoskb==null)
+            lingoskb=LingoSKB.create(Applic.getContext(),SerialNumber);
+        return lingoskb!=null && lingoskb.initECDH(savedAuthorization,lingoSecurityVersion);
+        }
+    lingoskb=null;
     long context=Natives.libre3BeginSecurityHandshake(securityContext);
     if(context==0L) {
         securityContext=0L;
@@ -1042,7 +1079,13 @@ private void handleMSLibre3SecurityNotificationsEnabledEvent() {
     // callback object. Reload at the start of each authentication so an old
     // in-memory root cannot override that explicit request for fresh pairing.
     isPreAuthorized=false;
+    resolveLingoVersion();
     var exportedKAuth = Natives.getLibre3kAuth(sensorptr);
+    if(lingoSecurityVersion!=0 && exportedKAuth!=null &&
+            !LingoSKB.canResume(exportedKAuth,lingoSecurityVersion)) {
+        // Keep the old record until a valid challenge completes fresh pairing.
+        exportedKAuth=null;
+        }
     if(initSecurityKeys(exportedKAuth,1)) {
         if(exportedKAuth==null) {
             {if(doLog) {Log.i(LOG_ID, SerialNumber + ": "+"exportedKAuth==null");};};
@@ -1067,7 +1110,10 @@ private void logevent(byte[] value) {
     lastEventReceived=last;
     }
 private void init() {
+    resolveLingoVersion();
     var exportedKAuth = Natives.getLibre3kAuth(sensorptr);
+    if(lingoSecurityVersion!=0 && !LingoSKB.canResume(exportedKAuth,lingoSecurityVersion))
+        exportedKAuth=null;
     if(!isPreAuthorized) {
         if(exportedKAuth!=null) {
             if(initSecurityKeys(exportedKAuth,1)) {
@@ -1083,6 +1129,18 @@ private void init() {
 
 
   }
+
+private void resolveLingoVersion() {
+    int version=Natives.getLingoSecurityVersion(sensorptr);
+    if(version!=lingoSecurityVersion) {
+        lingoSecurityVersion=version;
+        lingoskb=null;
+        Natives.libre3FreeSecurityContext(securityContext);
+        securityContext=0L;
+        oneMinuteRawData=new byte[version!=0?57:35];
+        oneMinuteReadingSize=0;
+        }
+    }
 
 private void dodisconnect(BluetoothGatt gatt) {
     recover(gatt,"protocol/setup failure: "+handshake,false,0L);
@@ -1316,6 +1374,7 @@ private int getcomphase() {
     return commandphase;
     }
 private  byte[]           generateEphemeralKeys() {
+    if(lingoskb!=null) return lingoskb.generateEphemeralKeys();
 
     var evikeys=Natives.libre3CreateEphemeralPublicKey(securityContext);
     if(evikeys==null || evikeys.length!=64) {
@@ -1371,7 +1430,7 @@ private boolean    lastphase5=false;
                     ;
                     break;
                 case 2: {
-                    if(sendSecurityCert(cryptolib.getAppCertificate())) { //TODO what with failure?
+                    if(sendSecurityCert(lingoskb!=null ? lingoskb.getAppCertificate() : cryptolib.getAppCertificate())) { //TODO what with failure?
                         commandphase = 3;
                         }
                     else {
@@ -1453,7 +1512,7 @@ private boolean    lastphase5=false;
 
     private int oneMinuteReadingSize = 0;
 //    private int oneMinutePacketNumber = 0;
-    private final byte[] oneMinuteRawData = new byte[35];
+    private byte[] oneMinuteRawData = new byte[35];
 
     @SuppressLint("MissingPermission")
 private long datatime=0L;
@@ -1542,11 +1601,12 @@ private    void glucose_data(byte[] value,long timmsec) {
         if(oneMinuteReadingSize >= oneMinuteRawData.length) {
            this.oneMinuteReadingSize = 0;
            byte[] decr = intDecrypt(cryptptr,3, oneMinuteRawData);
-           if(decr == null || decr.length!=29) {
+           if(decr == null || decr.length!=(lingoSecurityVersion!=0?51:29)) {
                 recover(mBluetoothGatt,"current-glucose decryption failed",false,0L);
                 return;
                }
-           long res=Natives.saveLibre3MinuteL(this.sensorptr, decr,timmsec);
+           long res=lingoSecurityVersion!=0 ? Natives.saveLingoMinuteL(this.sensorptr,decr,timmsec) :
+                   Natives.saveLibre3MinuteL(this.sensorptr,decr,timmsec);
            handleGlucoseResult(res,timmsec);
            datatime=timmsec;
            firstMinuteHandled=true;
@@ -1613,7 +1673,8 @@ private void fillHistory(int backFillStartHistoricLifeCount) {
            else {
             {if(doLog) {Log.i(LOG_ID, SerialNumber + ": "+"get History: lastHistoricLifeCountReceived ("+lastHistoricLifeCountReceived+")<backFillStartHistoricLifeCount ("+backFillStartHistoricLifeCount +")");};};
             int takelast=Math.max(lastHistoricLifeCountReceived,5);
-            byte[] command=Natives.libre3ControlHistory(1, takelast);
+            byte[] command=lingoSecurityVersion!=0 ? Natives.lingoControlHistory(1,takelast) :
+                    Natives.libre3ControlHistory(1,takelast);
             if(qsendcommand(command))
                 backFillInProgress=true;
             }
@@ -1623,7 +1684,8 @@ private void    fillClinical(int backFillStartLifeCount) {
       {if(doLog) {Log.i(LOG_ID, SerialNumber + ": "+"getlastLifeCountReceived(sensorptr)="+lastLifeCountReceived+" backFillStartLifeCount="+ backFillStartLifeCount);};};
 
       if(lastLifeCountReceived<backFillStartLifeCount) {
-        var command=Natives.libre3ClinicalControl(1,lastLifeCountReceived);
+        var command=lingoSecurityVersion!=0 ? Natives.lingoClinicalControl(1,lastLifeCountReceived) :
+                Natives.libre3ClinicalControl(1,lastLifeCountReceived);
         if(qsendcommand(command))
             backFillInProgress=true;
         }

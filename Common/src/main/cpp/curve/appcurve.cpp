@@ -394,10 +394,11 @@ int64_t JCurve::doehier(int menu,int item,bool right) {
     switch(menu) {
         case 0: 
             switch(item) {
-                case 0: 
-                    showui=!showui;
-                    settings->setui(showui);
-                    break;
+  //              case 0: 
+//                    showui=!showui;
+ //                   settings->setui(showui);
+
+   //                 break;
                 case 1:
                      if(androidSDK<24) 
                         return -1LL;
@@ -438,8 +439,13 @@ int64_t JCurve::doehier(int menu,int item,bool right) {
                     break;
                 };break;
         case 2: {
-                    switch(item)     {
-                        case 0: {
+                switch(item)     {
+                        case 0: 
+                        showui=!showui;
+                        settings->setui(showui);
+
+                          break;
+                        /*
                             nrmenu=0;
                             int lastsensor=sensors->lastscanned();
                             if(lastsensor>=0) {
@@ -452,6 +458,7 @@ int64_t JCurve::doehier(int menu,int item,bool right) {
                                     }
                                 }
                             }; return -1ll; 
+                            */
                         case 1:
                                 if(right) {
                                     showscans=!showscans; setshowscans(showscans);
@@ -2088,11 +2095,11 @@ void setfloatptr() {
     }
 #else
 int menus=0;
-const int *menuopt0[]={&showui,&menus,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr};
+const int *menuopt0[]={nullptr,&menus,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr};
 
 
 const int *menuopt0b[]={nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr};
-const int *menuopt1[]={nullptr,&appcurve.showscans,&appcurve.showstream,&appcurve.showhistories,&appcurve.shownumbers,&appcurve.showmeals,&appcurve.invertcolors};
+const int *menuopt1[]={&showui,&appcurve.showscans,&appcurve.showstream,&appcurve.showhistories,&appcurve.shownumbers,&appcurve.showmeals,&appcurve.invertcolors};
 const int **optionsmenu[]={menuopt0,menuopt0b,menuopt1,nullptr};
 const int *premenuopt1[]={nullptr,&appcurve.showcalibratedscans,&appcurve.showcalibratedstream,&appcurve.showcalibratedhistories,nullptr,nullptr,nullptr};
 const int **preoptionsmenu[]={nullptr,nullptr,premenuopt1,nullptr};

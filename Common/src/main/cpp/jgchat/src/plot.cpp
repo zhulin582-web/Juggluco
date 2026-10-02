@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "jgchat/ui_messages.hpp"
 #include "jgchat/plot.hpp"
 #include <algorithm>
 #include <charconv>
@@ -38,7 +39,7 @@ std::string local_time(uint32_t seconds, const char* format) {
     tm time{};
     char out[80]{};
     if (!localtime_r(&at, &time) || !std::strftime(out, sizeof(out), format, &time))
-        throw std::runtime_error("Cannot format plot time");
+        throw jgchat::UiError(jgchat::UiCode::cannot_format_plot_time);
     return out;
 }
 std::string escape(std::string_view value) {
@@ -65,10 +66,10 @@ Json glucose_plot(Json glucose) {
         const auto source = glucose.at("source").get<std::string>();
         if (end <= start || (unit != "mmol/L" && unit != "mg/dL") ||
             (source != "stream" && source != "history" && source != "scans"))
-            throw std::runtime_error("Invalid plot metadata");
+            throw jgchat::UiError(jgchat::UiCode::invalid_plot_metadata);
         const auto& tsv = glucose.at("data").get_ref<const std::string&>();
         auto lines = split(tsv, '\n');
-        if (lines.empty()) throw std::runtime_error("Missing plot columns");
+        if (lines.empty()) throw jgchat::UiError(jgchat::UiCode::missing_plot_columns);
         auto columns = split(lines.front(), '\t');
         auto column = [&](std::string_view name) {
             const auto found = std::find(columns.begin(), columns.end(), name);
@@ -78,30 +79,30 @@ Json glucose_plot(Json glucose) {
         auto value_column = column(unit);
         if (value_column == columns.size()) value_column = column("Glucose");
         if (time_column == columns.size() || sensor_column == columns.size() || value_column == columns.size())
-            throw std::runtime_error("Missing plot columns");
+            throw jgchat::UiError(jgchat::UiCode::missing_plot_columns);
         std::map<std::string, std::vector<Point>> series;
         std::size_t count = 0;
         double minimum = 1e10, maximum = 0;
         for (std::size_t i = 1; i < lines.size(); ++i) {
             if (lines[i].empty()) continue;
             const auto fields = split(lines[i], '\t');
-            if (fields.size() != columns.size() || ++count > 1000) throw std::runtime_error("Invalid plot row");
+            if (fields.size() != columns.size() || ++count > 1000) throw jgchat::UiError(jgchat::UiCode::invalid_plot_row);
             uint32_t at{};
             const auto time = fields[time_column];
             const auto parsed = std::from_chars(time.data(), time.data() + time.size(), at);
             if (parsed.ec != std::errc{} || parsed.ptr != time.data() + time.size() || at < start || at >= end)
-                throw std::runtime_error("Invalid plot timestamp");
+                throw jgchat::UiError(jgchat::UiCode::invalid_plot_timestamp);
             std::istringstream input{std::string(fields[value_column])};
             input.imbue(std::locale::classic());
             double value{};
             if (!(input >> value) || !(input >> std::ws).eof() || !std::isfinite(value) || value < 0 || value > 10000)
-                throw std::runtime_error("Invalid plot value");
+                throw jgchat::UiError(jgchat::UiCode::invalid_plot_value);
             const auto sensor = fields[sensor_column];
-            if (sensor.empty() || sensor.size() > 128) throw std::runtime_error("Invalid plot sensor");
+            if (sensor.empty() || sensor.size() > 128) throw jgchat::UiError(jgchat::UiCode::invalid_plot_sensor);
             series[std::string(sensor)].push_back({at, value});
             minimum = std::min(minimum, value); maximum = std::max(maximum, value);
         }
-        if (count != glucose.at("returned").get<std::size_t>()) throw std::runtime_error("Plot count mismatch");
+        if (count != glucose.at("returned").get<std::size_t>()) throw jgchat::UiError(jgchat::UiCode::plot_count_mismatch);
         if (!count) return error("plot_no_data", "No glucose readings were found in this interval; no plot was created.");
         // Too many overlapping sensors would make a readable legend impossible.
         if (series.size() > 8) return error("plot_many_sensors", "Request a shorter interval with at most eight sensors.");
@@ -181,7 +182,7 @@ Json glucose_plot(Json glucose) {
 }
 
 Json xy_plot(const Json& spec, bool from_saved_table) {
-    auto bad = [] { throw std::invalid_argument("Invalid plot arguments: check keys, text limits, finite coordinates and the 8-series/1000-point limit."); };
+    auto bad = [] { throw jgchat::UiArgumentError(jgchat::UiCode::invalid_plot_arguments_check_keys_text_limits_finite_coordinates_and_the_8_series_100); };
     auto shape = [&](const Json& value, std::initializer_list<const char*> keys) {
         if (!value.is_object() || value.size() != keys.size()) bad();
         for (const char* key : keys) if (!value.contains(key)) bad();

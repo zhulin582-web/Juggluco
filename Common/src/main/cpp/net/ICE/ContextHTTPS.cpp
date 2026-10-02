@@ -43,20 +43,24 @@
 /*
 #define LOGGERHTTPS(...) fprintf(stderr,__VA_ARGS__)
 #define LOGARHTTPS(...) fprintf(stderr,"%s\n",__VA_ARGS__)
-#define lerror(...) perror(__VA_ARGS__) */
+#define lerrorHTTPS(...) perror(__VA_ARGS__) */
 #include "logs.hpp"
 #include "inout.hpp"
 #include "strsepconcat.hpp"
 //#define MAIN 1
 //#define LOGHTTPS
+#define LOGGERHTTPSERROR(...) LOGGER("HTTPS: " __VA_ARGS__)
+#define LOGARHTTPSERROR(...) LOGAR("HTTPS: " __VA_ARGS__)
+#define flerrorHTTPS(...) flerror("HTTPS: " __VA_ARGS__)
+#define lerrorHTTPS(...) lerror("HTTPS: " __VA_ARGS__)
 #ifdef LOGHTTPS
 #define LOGGERHTTPS(...) LOGGER("HTTPS: " __VA_ARGS__)
 #define LOGARHTTPS(...) LOGAR("HTTPS: " __VA_ARGS__)
-#define flerrorHTTPS(...) flerror("HTTPS: " __VA_ARGS__)
+//#define flerrorHTTPS(...) flerror("HTTPS: " __VA_ARGS__)
 #else
 #define LOGGERHTTPS(...) 
 #define LOGARHTTPS(...) 
-#define flerrorHTTPS(...) 
+//#define flerrorHTTPS(...) 
 #endif
 //#define LOGGERHTTPS(...) 
 //#define LOGARHTTPS(...) 
@@ -160,7 +164,7 @@ static bool load_android_cacerts(SSL_CTX* ctx) {
         }
      else {
         std::string er=get_openssl_error_string();
-        LOGGERHTTPS("SSL_CTX_set_default_verify_paths failed: %s\n",er.data());
+        LOGGERHTTPSERROR("SSL_CTX_set_default_verify_paths failed: %s\n",er.data());
         return false;
         }
 #else
@@ -172,7 +176,7 @@ static bool load_android_cacerts(SSL_CTX* ctx) {
         }
      else {
         std::string er=get_openssl_error_string();
-        LOGGERHTTPS("SSL_CTX_load_verify_locations failed: %s\n",er.data());
+        LOGGERHTTPSERROR("SSL_CTX_load_verify_locations failed: %s\n",er.data());
         return false;
         }
 #endif
@@ -236,7 +240,7 @@ static int tcp_connect(const char *host, int port) {
     snprintf(port_str, sizeof(port_str), "%d", port);
     LOGGERHTTPS("tcp_connect(%s,%d)\n",host,port);
     if(getaddrinfo(host, port_str, &hints, &res) != 0) {
-        lerror("getaddrinfo");
+        lerrorHTTPS("getaddrinfo");
         return -1;
         }
     destruct _{[res]{ freeaddrinfo(res);}};
@@ -244,11 +248,11 @@ static int tcp_connect(const char *host, int port) {
     int sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     LOGGERHTTPS("After socket sock=%d\n",sock);
     if(sock < 0) {
-        lerror("socket");
+        lerrorHTTPS("socket");
         return -1;
        }
     if(connect(sock, res->ai_addr, res->ai_addrlen) != 0) {
-        lerror("connect");
+        lerrorHTTPS("connect");
         close(sock);
         return -1;
        }
@@ -279,12 +283,13 @@ static int SSL_set_tlsext_host_name2(const SSL *s, const char *name) {
         LOGARHTTPS("ContextHTTPS()");
         static bool initlib=initLibrary();
         if(!initlib) {
+            LOGARHTTPSERROR("initLibrary failed");
             error=true;
             return;
             }
         ctx=SSL_CTX_new(TLS_client_method());
         if (!ctx) {
-            LOGARHTTPS("Failed to create SSL_CTX");
+            LOGARHTTPSERROR("Failed to create SSL_CTX");
             error=true;
             }
         error=!load_android_cacerts(ctx);
@@ -364,11 +369,11 @@ static int SSLreadfull(SSL* ssl, char *dataptr,const int buflen) {
             constexpr const int maxbuf=200;
             char buf[maxbuf];
             ERR_error_string_n(e, buf, maxbuf);
-            LOGGERHTTPS("SSL_read SSL_ERROR %s\n",buf);
+            LOGGERHTTPSERROR("SSL_read SSL_ERROR %s\n",buf);
             }
         else {
             if(err == SSL_ERROR_SYSCALL) {
-                lerror("SSL_read syscall error");
+                lerrorHTTPS("SSL_read syscall error");
                 }
             }
          break;
@@ -402,7 +407,7 @@ static int SSLwritefull(SSL* ssl, const char *dataptr,const int buflen) {
             }
         else {
             if(err == SSL_ERROR_SYSCALL) {
-                lerror("SSL_write syscall error");
+                lerrorHTTPS("SSL_write syscall error");
                 }
             }
          break;
@@ -448,7 +453,7 @@ static void shutdowner(int sock,SSL* ssl) {
                 while ((err = ERR_get_error()) != 0) {
                     char buf[256];
                     ERR_error_string_n(err, buf, sizeof(buf));
-                    LOGGERHTTPS("OpenSSL error: %s (0x%lx)\n", buf, err);
+                    LOGGERHTTPSERROR("OpenSSL error: %s (0x%lx)\n", buf, err);
                     }
                 }
              break;
@@ -460,12 +465,13 @@ static void shutdowner(int sock,SSL* ssl) {
 std::pair<std::vector<char>,int> ContextHTTPS::request(const std::string_view host,int port,const std::string_view path,const std::string_view TYPE,const std::span<const char> input, const std::string_view header) {
     std::vector<char> uit;   
     if(error) {
+        LOGARHTTPSERROR("request error=true");
         return {uit,-1};
         }
     int sock = tcp_connect(host.data(), port);
-    if (sock < 0) {
+    if(sock < 0) {
         return {uit,-1};
-    }
+       }
     SSL* ssl = SSL_new(ctx);
     LOGGERHTTPS("after SSL_new(ctx)=%p\n",ssl);
 
@@ -484,12 +490,12 @@ std::pair<std::vector<char>,int> ContextHTTPS::request(const std::string_view ho
     LOGGERHTTPS("after SSL_connect conres=%d\n",conres);
     if(conres != 1) {
        const std:: string mess=get_openssl_error_string();
-       LOGGERHTTPS("SSL handshake failed: %s\n", mess.c_str());
+       LOGGERHTTPSERROR("SSL handshake failed: %s\n", mess.c_str());
         return {uit,-1};
        }
     long verify_result = SSL_get_verify_result(ssl);
     if (verify_result != X509_V_OK) {
-       LOGGERHTTPS("Certificate verification failed: %s\n", X509_verify_cert_error_string(verify_result)); 
+       LOGGERHTTPSERROR("Certificate verification failed: %s\n", X509_verify_cert_error_string(verify_result)); 
     }; 
     const char closebuf[]{"\r\nConnection: close\r\n\r\n"};
     strsepconcat req {""sv,TYPE , " "sv,path," HTTP/1.1\r\nHost: "sv , host , "\r\nContent-Length: "sv,std::to_string(input.size()), header,closebuf};
@@ -518,8 +524,8 @@ std::pair<std::vector<char>,int> ContextHTTPS::request(const std::string_view ho
         startpos+=end;
         }
     else {
-        error=true;
-        LOGGERHTTPS("no space in #%s# len=%d\n",dataptr,n);
+        //error=true;
+        LOGGERHTTPSERROR("no space in #%s# len=%d\n",dataptr,n);
         return {uit,-1};
         }
     LOGGERHTTPS("Status Code=%d\n",status_code);

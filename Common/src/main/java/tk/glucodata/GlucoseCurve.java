@@ -681,7 +681,7 @@ static private boolean startv1=true;
                 switch(menu) {
                      case 0:
                         switch (item) {
-                            case 0: ((MainActivity) getContext()).selectionSystemUI(); break;
+                           case 0: JugglucoChat.show((MainActivity) getContext());break;
                             case 1: Menus.show((MainActivity) getContext());break;
                             case 2: {
                             MainActivity activity = (MainActivity) getContext();
@@ -750,6 +750,10 @@ static private boolean startv1=true;
                 };
                 };break;
             case 2: {
+                if(item==0) {
+                    ((MainActivity) getContext()).selectionSystemUI();
+                    break;
+                    }
                 var light=item==0;
                 var main=(MainActivity) getContext();
                 main.lightBars(light);

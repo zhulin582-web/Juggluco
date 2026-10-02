@@ -100,7 +100,7 @@ jugglucotext detext {
 .SD="SD: %.2f",
 .glucose_variability="Glukosevariabilität: %.1f%%",
       .menustr0={
-"System UI",
+"ChatGPT",
 "Menus",
 "Uhren",
 "Sensor",
@@ -127,7 +127,7 @@ detext.newamount,
 "Sprechen",
 "Schweben"
 },
-.menustr2={"LetzterScan","Scans","Stream","History","Mengen","Mahlzeiten","Dunkelmodus"},
+.menustr2={"System UI","Scans","Stream","History","Mengen","Mahlzeiten","Dunkelmodus"},
 .menustr3= {hourminstr,"Suche", "Datum", "Vortag", "Tag später", "Woche zurück", "Woche später"},
 
 #endif //INJUGGLUCO

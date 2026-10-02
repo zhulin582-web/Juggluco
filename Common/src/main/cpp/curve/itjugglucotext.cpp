@@ -105,7 +105,7 @@ static jugglucotext ittext {
 	.SD="SD: %.2f",
 	.glucose_variability="Variabilità glicemica: %.1f%%",
      .menustr0={
-		"UI di sistema",
+		"ChatGPT",
 		"Menu",
 		"Orologio",
 		"Sensore",
@@ -131,7 +131,7 @@ static jugglucotext ittext {
 		"Pronuncia",
 		"Flottante"
 		},
-	.menustr2= {"Ultima scansione","Scansioni","Flusso","Cronologia","Valori","Pasti","Modalità scura"}, 
+	.menustr2= {"UI di sistema","Scansioni","Flusso","Cronologia","Valori","Pasti","Modalità scura"}, 
 	.menustr3= {hourminstr,"Cerca","Data","Giorno prima","Giorno dopo","Settimana prima","Settimana dopo"}, 
 #endif //INJUGGLUCO
 #else

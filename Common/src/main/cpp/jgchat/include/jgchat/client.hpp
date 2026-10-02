@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "ui_messages.hpp"
 #include "auth.hpp"
 #include "tools.hpp"
 
@@ -7,7 +8,7 @@ namespace jgchat {
 class Workspace;
 // Events are small UI messages such as a tool name or a progress indication;
 // never credentials or hidden reasoning.
-using EventSink = std::function<void(std::string_view)>;
+using EventSink = std::function<void(const UiMessage&)>;
 using TokenSink = std::function<void(const Tokens&)>;
 class ChatClient {
 public:

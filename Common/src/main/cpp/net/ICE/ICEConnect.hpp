@@ -265,8 +265,10 @@ virtual int makeconnection2(passhost_t *pass,char stype) override {
         LOGGER("makeconnection2 %s\n",pass->getICEname().data());
         sleep(1);
         connect(pass);
-        if(!agent.load())
+        if(!agent.load()) {
+            LOGAR("makeconnection2 !agent.load()");
             return -1;
+            }
         return shakehands(pass,stype);
         }
 

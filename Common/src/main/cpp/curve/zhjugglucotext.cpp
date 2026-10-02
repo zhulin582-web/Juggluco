@@ -53,7 +53,7 @@ jugglucotext zhtext {
     .SD = "SD: %.2f",
     .glucose_variability = "葡萄糖变异性: %.1f%%",
     .menustr0 = {
-"系统 UI",
+"ChatGPT",
         "主菜单",
         "手表",
         "传感器",
@@ -80,7 +80,7 @@ jugglucotext zhtext {
 "悬浮窗"
     },
 
-    .menustr2 = {"最后一次扫描",
+    .menustr2 = {"系统 UI",
         "扫描数据",
         "蓝牙数据",
         "历史记录",

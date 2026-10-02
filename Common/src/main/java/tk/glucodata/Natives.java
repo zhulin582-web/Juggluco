@@ -607,6 +607,15 @@ public static native long getLibre3secs(byte[]  nfc1ar);
 public static native long getLibre3Sensorptr(String sensorid,long starttime);
 public static native long getLibre3SensorptrPD(String sensorid,long starttime,byte[] pin,String deviceaddress);
 public static native long saveLibre3MinuteL(long sensorptr,byte[] mindata,long nowmsec);
+public static native long saveLingoMinuteL(long sensorptr,byte[] mindata,long nowmsec);
+public static native boolean saveLingoHistory(long sensorptr,byte[] history);
+public static native boolean saveLingoFastData(long sensorptr,byte[] fastdata);
+public static native byte[] lingoControlHistory(int arg,int from);
+public static native byte[] lingoClinicalControl(int arg,int from);
+/** Zero for Libre 3; otherwise the Lingo version, or -1 when unknown. */
+public static native int getLingoSecurityVersion(long sensorptr);
+/** Classify the already-read NFC patch info without writing to the sensor. */
+public static native int lingoPatchSecurityVersion(byte[] patchInfo);
 public static native boolean saveLibre3fastData(long sensorptr,byte[] mindata);
 public static native boolean saveLibre3History(long sensorptr,byte[] mindata);
 public static native int libre3EventLog(long sensorptr,byte[] logs);
@@ -719,8 +728,8 @@ public static native int getsslport( );
 public static native void sethttpport(int val);
 public static native int gethttpport( );
 
-public static native void setsaytreatments(boolean val);
-public static native boolean getsaytreatments( );
+public static native void setGiveAmounts(boolean val);
+public static native boolean getGiveAmounts( );
 public static native boolean getuseuploader( );
 public static native String getnightuploadurl( );
 public static native String getnightuploadsecret( );

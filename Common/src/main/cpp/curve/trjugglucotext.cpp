@@ -99,7 +99,7 @@ jugglucotext trtext {
         .SD="SD: %.2f",
         .glucose_variability="Glikoz Değişkenliği: %.1f%%",
      .menustr0={
-"Sistem Arayüzü",
+"ChatGPT",
                 "Menüler",
                 "Saat",
                 "Sensör",
@@ -127,7 +127,7 @@ jugglucotext trtext {
                 "Seslendirme",
 "Yüzen Glikoz"
                 },
-        .menustr2= {"Son Tarama",
+        .menustr2= {"Sistem Arayüzü",
         "Taramalar",
         "Akış",
         "Geçmiş",

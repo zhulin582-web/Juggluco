@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "jgchat/ui_messages.hpp"
 #include "jgchat/http.hpp"
 #include "jgchat/http_response.hpp"
 #include "jgchat/diagnostics.hpp"
@@ -40,7 +41,7 @@ template<class T> T symbol(void* handle, const char* name) {
 }
 template<class T> T required(void* handle, const char* name) {
     auto value = symbol<T>(handle, name);
-    if (!value) throw std::runtime_error(std::string("Required native TLS function unavailable: ") + name);
+    if (!value) throw UiError(UiMessage::detail(UiCode::tls_function_unavailable, name));
     return value;
 }
 struct TlsApi {
@@ -85,11 +86,11 @@ struct TlsApi {
             ssl_handle = dlopen(name, RTLD_NOW | RTLD_LOCAL); if (ssl_handle) break;
         }
 #endif
-        if (!ssl_handle || !crypto_handle) throw std::runtime_error("Native OpenSSL/BoringSSL libraries unavailable");
+        if (!ssl_handle || !crypto_handle) throw jgchat::UiError(jgchat::UiCode::native_openssl_boringssl_libraries_unavailable);
         client_method = symbol<decltype(client_method)>(ssl_handle, "TLS_client_method");
         if (!client_method) client_method = required<decltype(client_method)>(ssl_handle, "SSLv23_client_method");
         if (auto init = symbol<int (*)()>(ssl_handle, "SSL_library_init")) {
-            if (init() != 1) throw std::runtime_error("Native TLS initialization failed");
+            if (init() != 1) throw jgchat::UiError(jgchat::UiCode::native_tls_initialization_failed);
         }
 #define SSL_FN(member, name) member = required<decltype(member)>(ssl_handle, name)
 #define CRYPTO_FN(member, name) member = required<decltype(member)>(crypto_handle, name)
@@ -111,9 +112,9 @@ struct TlsApi {
         if (!peer_certificate) peer_certificate = required<decltype(peer_certificate)>(ssl_handle, "SSL_get_peer_certificate");
         check_host = symbol<decltype(check_host)>(crypto_handle, "X509_check_host");
         check_ip = symbol<decltype(check_ip)>(crypto_handle, "X509_check_ip_asc");
-        if (!set_host && !check_host) throw std::runtime_error("Native TLS hostname verification unavailable");
-        if (!sni && !ssl_ctrl) throw std::runtime_error("Native TLS SNI unavailable");
-        if (!ctx_min_version && !ctx_ctrl) throw std::runtime_error("Native TLS minimum version control unavailable");
+        if (!set_host && !check_host) throw jgchat::UiError(jgchat::UiCode::native_tls_hostname_verification_unavailable);
+        if (!sni && !ssl_ctrl) throw jgchat::UiError(jgchat::UiCode::native_tls_sni_unavailable);
+        if (!ctx_min_version && !ctx_ctrl) throw jgchat::UiError(jgchat::UiCode::native_tls_minimum_version_control_unavailable);
     }
 };
 TlsApi& tls_api() { static TlsApi api; return api; }
@@ -138,7 +139,7 @@ public:
         sigemptyset(&set_); sigaddset(&set_, SIGPIPE);
         sigset_t pending{}; sigpending(&pending); pending_before_ = sigismember(&pending, SIGPIPE) == 1;
         if (pthread_sigmask(SIG_BLOCK, &set_, &prior_) != 0)
-            throw std::runtime_error("Cannot protect native TLS write against SIGPIPE");
+            throw jgchat::UiError(jgchat::UiCode::cannot_protect_native_tls_write_against_sigpipe);
         active_ = true;
     }
     ~BlockSigpipe() {
@@ -159,8 +160,8 @@ public:
 };
 
 void check_deadline(Clock::time_point deadline, const std::atomic_bool& cancel) {
-    if (cancel.load()) throw std::runtime_error("Native HTTPS cancelled");
-    if (Clock::now() >= deadline) throw std::runtime_error("Native HTTPS timed out");
+    if (cancel.load()) throw jgchat::UiError(jgchat::UiCode::native_https_cancelled);
+    if (Clock::now() >= deadline) throw jgchat::UiError(jgchat::UiCode::native_https_timed_out);
 }
 void wait_socket(int socket, short events, Clock::time_point deadline, const std::atomic_bool& cancel) {
     for (;;) {
@@ -169,10 +170,10 @@ void wait_socket(int socket, short events, Clock::time_point deadline, const std
         pollfd fd{socket, events, 0};
         const int result = poll(&fd, 1, static_cast<int>(std::clamp<std::int64_t>(left.count(), 1, 50)));
         if (result > 0) {
-            if (fd.revents & POLLNVAL) throw std::runtime_error("Native HTTPS socket closed");
+            if (fd.revents & POLLNVAL) throw jgchat::UiError(jgchat::UiCode::native_https_socket_closed);
             return; // SSL/connect reports EOF/POLLERR with its actual operation.
         }
-        if (result < 0 && errno != EINTR) throw std::runtime_error("Native HTTPS socket poll failed");
+        if (result < 0 && errno != EINTR) throw jgchat::UiError(jgchat::UiCode::native_https_socket_poll_failed);
     }
 }
 Socket connect_socket(const HttpRequest& request, Clock::time_point deadline, const std::atomic_bool& cancel) {
@@ -186,7 +187,7 @@ Socket connect_socket(const HttpRequest& request, Clock::time_point deadline, co
     int result = getaddrinfo(request.host.c_str(), port.c_str(), &hints, &addresses);
     std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> owned(addresses, freeaddrinfo);
     check_deadline(deadline, cancel);
-    if (result != 0) throw std::runtime_error("Native HTTPS DNS resolution failed");
+    if (result != 0) throw jgchat::UiError(jgchat::UiCode::native_https_dns_resolution_failed);
     for (auto* address = addresses; address; address = address->ai_next) {
         check_deadline(deadline, cancel);
         Socket socket(::socket(address->ai_family, address->ai_socktype, address->ai_protocol));
@@ -208,7 +209,7 @@ Socket connect_socket(const HttpRequest& request, Clock::time_point deadline, co
         int error = 0; socklen_t size = sizeof(error);
         if (getsockopt(socket.fd, SOL_SOCKET, SO_ERROR, &error, &size) == 0 && error == 0) return socket;
     }
-    throw std::runtime_error("Native HTTPS TCP connection failed");
+    throw jgchat::UiError(jgchat::UiCode::native_https_tcp_connection_failed);
 }
 
 void load_trust(TlsApi& api, SSL_CTX* context) {
@@ -222,19 +223,19 @@ void load_trust(TlsApi& api, SSL_CTX* context) {
         closedir(directory);
         if (api.ctx_load_ca(context, nullptr, path) == 1) loaded = true;
     }
-    if (!loaded) throw std::runtime_error("Android system CA certificates unavailable");
+    if (!loaded) throw jgchat::UiError(jgchat::UiCode::android_system_ca_certificates_unavailable);
 #else
     if (!api.ctx_default_ca || api.ctx_default_ca(context) != 1)
-        throw std::runtime_error("System CA certificates unavailable");
+        throw jgchat::UiError(jgchat::UiCode::system_ca_certificates_unavailable);
 #endif
 }
 // Retry a nonblocking TLS operation only on WANT_READ/WANT_WRITE.
 void tls_retry(TlsApi& api, SSL* ssl, int result, int fd, Clock::time_point deadline,
-               const std::atomic_bool& cancel, const char* error) {
+               const std::atomic_bool& cancel, UiCode error) {
     const int reason = api.ssl_error(ssl, result);
     if (reason == SSL_ERROR_WANT_READ) wait_socket(fd, POLLIN, deadline, cancel);
     else if (reason == SSL_ERROR_WANT_WRITE) wait_socket(fd, POLLOUT, deadline, cancel);
-    else throw std::runtime_error(error);
+    else throw UiError(error);
 }
 
 HttpResponse request_https(const HttpRequest& request, const std::atomic_bool& cancel) {
@@ -247,30 +248,30 @@ HttpResponse request_https(const HttpRequest& request, const std::atomic_bool& c
     auto& api = tls_api();
     BlockSigpipe no_sigpipe;
     std::unique_ptr<SSL_CTX, decltype(api.ctx_free)> context(api.ctx_new(api.client_method()), api.ctx_free);
-    if (!context) throw std::runtime_error("Native TLS context allocation failed");
+    if (!context) throw jgchat::UiError(jgchat::UiCode::native_tls_context_allocation_failed);
     // BoringSSL exposes a real setter; OpenSSL exposes this as SSL_CTX_ctrl.
     constexpr int set_min_proto_version = 123;
     const auto min_ok = api.ctx_min_version ? api.ctx_min_version(context.get(), TLS1_2_VERSION) :
         api.ctx_ctrl(context.get(), set_min_proto_version, TLS1_2_VERSION, nullptr);
-    if (min_ok != 1) throw std::runtime_error("Cannot require TLS 1.2 or newer");
+    if (min_ok != 1) throw jgchat::UiError(jgchat::UiCode::cannot_require_tls_1_2_or_newer);
     api.ctx_verify(context.get(), SSL_VERIFY_PEER, nullptr);
     load_trust(api, context.get());
     std::unique_ptr<SSL, decltype(api.ssl_free)> ssl(api.ssl_new(context.get()), api.ssl_free);
-    if (!ssl) throw std::runtime_error("Native TLS connection allocation failed");
+    if (!ssl) throw jgchat::UiError(jgchat::UiCode::native_tls_connection_allocation_failed);
     constexpr int set_sni = 55; // SSL_CTRL_SET_TLSEXT_HOSTNAME, OpenSSL ABI.
     const auto sni_ok = api.sni ? api.sni(ssl.get(), request.host.c_str()) :
         api.ssl_ctrl(ssl.get(), set_sni, 0, const_cast<char*>(request.host.c_str()));
-    if (sni_ok != 1) throw std::runtime_error("Cannot set TLS server name");
+    if (sni_ok != 1) throw jgchat::UiError(jgchat::UiCode::cannot_set_tls_server_name);
     in_addr ip4{};
     const bool ip_literal = inet_pton(AF_INET, request.host.c_str(), &ip4) == 1;
-    if (ip_literal && !api.check_ip) throw std::runtime_error("Native TLS IP certificate verification unavailable");
+    if (ip_literal && !api.check_ip) throw jgchat::UiError(jgchat::UiCode::native_tls_ip_certificate_verification_unavailable);
     // Hostname verification is performed by the library when available and
     // independently against the peer certificate after the handshake below.
     if (!ip_literal && api.set_host && api.set_host(ssl.get(), request.host.c_str()) != 1)
-        throw std::runtime_error("Cannot configure TLS hostname verification");
+        throw jgchat::UiError(jgchat::UiCode::cannot_configure_tls_hostname_verification);
     trace.stage("dns_and_tcp");
     auto socket = connect_socket(request, deadline, cancel);
-    if (api.set_fd(ssl.get(), socket.fd) != 1) throw std::runtime_error("Cannot attach TLS socket");
+    if (api.set_fd(ssl.get(), socket.fd) != 1) throw jgchat::UiError(jgchat::UiCode::cannot_attach_tls_socket);
     trace.stage("tls_handshake");
     for (;;) {
         check_deadline(deadline, cancel);
@@ -278,18 +279,18 @@ HttpResponse request_https(const HttpRequest& request, const std::atomic_bool& c
         const int result = api.ssl_connect(ssl.get());
         if (result == 1) break;
         tls_retry(api, ssl.get(), result, socket.fd, deadline, cancel,
-                  "Native TLS handshake or certificate-chain verification failed");
+                  UiCode::native_tls_handshake_or_certificate_chain_verification_failed);
     }
-    if (api.verify_result(ssl.get()) != X509_V_OK) throw std::runtime_error("TLS certificate-chain verification failed");
+    if (api.verify_result(ssl.get()) != X509_V_OK) throw jgchat::UiError(jgchat::UiCode::tls_certificate_chain_verification_failed);
     std::unique_ptr<X509, decltype(api.x509_free)> certificate(api.peer_certificate(ssl.get()), api.x509_free);
-    if (!certificate) throw std::runtime_error("TLS peer certificate missing");
+    if (!certificate) throw jgchat::UiError(jgchat::UiCode::tls_peer_certificate_missing);
     if (ip_literal) {
         if (api.check_ip(certificate.get(), request.host.c_str(), 0) != 1)
-            throw std::runtime_error("TLS certificate IP mismatch");
+            throw jgchat::UiError(jgchat::UiCode::tls_certificate_ip_mismatch);
     } else if (api.check_host) {
         if (api.check_host(certificate.get(), request.host.c_str(), request.host.size(), 0, nullptr) != 1)
-            throw std::runtime_error("TLS certificate hostname mismatch");
-    } else if (!api.set_host) throw std::runtime_error("TLS hostname verification unavailable");
+            throw jgchat::UiError(jgchat::UiCode::tls_certificate_hostname_mismatch);
+    } else if (!api.set_host) throw jgchat::UiError(jgchat::UiCode::tls_hostname_verification_unavailable);
 
     trace.stage("send_request");
     const auto output = serialize_http_request(request);
@@ -298,7 +299,7 @@ HttpResponse request_https(const HttpRequest& request, const std::atomic_bool& c
         api.clear_errors();
         const int result = api.ssl_write(ssl.get(), output.data() + pos, static_cast<int>(output.size() - pos));
         if (result > 0) pos += static_cast<std::size_t>(result);
-        else tls_retry(api, ssl.get(), result, socket.fd, deadline, cancel, "Native TLS write failed");
+        else tls_retry(api, ssl.get(), result, socket.fd, deadline, cancel, UiCode::native_tls_write_failed);
     }
     HttpResponseParser parser(request.max_response_bytes, request.on_body);
     std::array<char, 8192> buffer{};
@@ -319,7 +320,7 @@ HttpResponse request_https(const HttpRequest& request, const std::atomic_bool& c
             // responses. A Content-Length/chunked response already returned.
             if (reason == SSL_ERROR_WANT_READ) wait_socket(socket.fd, POLLIN, deadline, cancel);
             else if (reason == SSL_ERROR_WANT_WRITE) wait_socket(socket.fd, POLLOUT, deadline, cancel);
-            else throw std::runtime_error("Native TLS read failed or ended without close_notify");
+            else throw jgchat::UiError(jgchat::UiCode::native_tls_read_failed_or_ended_without_close_notify);
         }
     }
 }
@@ -328,8 +329,7 @@ HttpResponse request_https(const HttpRequest& request, const std::atomic_bool& c
 HttpClient native_https() {
     return [](const HttpRequest& request, const std::atomic_bool& cancel) -> HttpResponse {
         try { return request_https(request, cancel); }
-        catch (const std::exception& e) { return {0, {}, e.what()}; }
-        catch (...) { return {0, {}, "Native HTTPS unexpected failure"}; }
+        catch (...) { return http_failure(current_ui_error()); }
     };
 }
 } // namespace jgchat
