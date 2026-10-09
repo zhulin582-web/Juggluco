@@ -567,7 +567,7 @@ bluediag(MainActivity act,final ArrayList<SuperGattCallback> gatts) {
         clear.setVisibility(GONE);
         bluestate.setPaddingRelative(0,0,dp(5),0);
        diagnosticGrid.setLayoutParams( new ViewGroup.MarginLayoutParams(MATCH_PARENT,WRAP_CONTENT));
-
+             scanview.setLayoutParams( new ViewGroup.MarginLayoutParams(MATCH_PARENT,WRAP_CONTENT));
         Layout.getMargins(info).rightMargin=(int)(GlucoseCurve.getwidth()*.1);
         content=new Layout(act,
                 new View[]{bluestate,usebluetooth,sensorAction,priority,disconnectsensor,info},

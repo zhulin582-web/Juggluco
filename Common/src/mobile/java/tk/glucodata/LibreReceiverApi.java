@@ -282,7 +282,7 @@ final class LibreReceiverApi {
             if (!(loader instanceof BaseDexClassLoader)) throw new IOException("No Android native-library loader");
             String path=((BaseDexClassLoader)loader).findLibrary("libre_receiver_skb");
             if (path==null) throw new IOException("Missing packaged liblibre_receiver_skb.so for this process ABI");
-            pinLibrary(path);
+           // pinLibrary(path);
             Natives.libreReceiverInit(path,unb64(PRIVATE_SKB),unb64(WRAP_SKB));
             instance=new NativeCrypto();
             return instance;
@@ -292,6 +292,8 @@ final class LibreReceiverApi {
             byte[] iv=new byte[12]; random.nextBytes(iv); return Natives.libreReceiverCrypt(1,b,iv);
         }
         public synchronized byte[] decrypt(byte[] b) throws IOException { return Natives.libreReceiverCrypt(2,b,null); }
+      }
+/*
         private static void pinLibrary(String path) throws IOException,GeneralSecurityException {
             // findLibrary can refer to an extracted file OR an entry loaded directly from an APK.
             int zipAt=path.indexOf("!/");
@@ -314,13 +316,12 @@ final class LibreReceiverApi {
         private static void hashStream(MessageDigest digest,InputStream in) throws IOException {
             byte[] b=new byte[32768]; int n; long total=0;
             while((n=in.read(b))!=-1) { total+=n; if(total>40L*1024*1024) throw new IOException("SKB library too large"); digest.update(b,0,n); }
-        }
-    }
-
+            }
     // Fixed APPLICATION-key containers from the supplied NL APK, not user credentials.
     // They are SKB containers, not plaintext PKCS#8 or AES keys.
-    private static final String SKB_SHA256= "214c4d01609cb6c8bf2ca5f9f894142d356d5a8177e5faa9246237c2c3a10c05";
-    private static final String SKB_SHA256_ARM32= "ab17668b357ab47399197f684b8d384b77213a68cd8c9490f62d37d4ea0e457f";
+          private static final String SKB_SHA256= "214c4d01609cb6c8bf2ca5f9f894142d356d5a8177e5faa9246237c2c3a10c05";
+    private static final String SKB_SHA256_ARM32= "b8b2fad33c68e46762a11b6e08fa0e2e38a3f60d5acdae165af0097109877492";
+    */
     private static final String PRIVATE_SKB=
             "gyw6TgIAAAACAAABAAAAAADiy/6rDM4EgCUkdZ1caQ4LjU+xMcHNvK4hcIhzudEuhU9LsL4HuJJx68PLgzQFX5YAAAACn9qV" +
             "/f/khPy4lT0zdRQuu+TldiuC3GMEAAADAEW0e1UMxEEDM4NL6XFhaDt0oVmukuF1yY64R4TT/ppt1FZidVczgiZXrT1iEn4I" +

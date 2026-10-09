@@ -127,7 +127,7 @@ android {
         //compileSdk 36
         applicationId "tk.glucodata"
 
-         versionName '11.3.0'
+         versionName '11.4.1'
 //    multiDexEnabled true
 
         buildConfigField 'int', 'isRelease', '0'
@@ -202,8 +202,8 @@ flavorDimensions = ['wearos','libreVersion','SiBionics', 'DexCom','Google']
         libreOld {
     //******  Zet op rollout op 100% ******
             dimension 'libreVersion'
-            versionCode 913 //LIBRE2ONLY
-         //    versionName '11.3.0-no3'
+            versionCode 921 //LIBRE2ONLY
+         //    versionName '11.4.1-no3'
             versionNameSuffix '-no3'
             buildConfigField 'int', 'libreVersion', '2'
             externalNativeBuild.cmake {
@@ -216,7 +216,7 @@ flavorDimensions = ['wearos','libreVersion','SiBionics', 'DexCom','Google']
 //       minSdk 23
             dimension 'libreVersion'
         versionNameSuffix '-li3'
-        versionCode 913 //LIBRE3
+        versionCode 921 //LIBRE3
     //******  Zet op rollout op 100% ******
 
                buildConfigField 'int', 'libreVersion', '3'
@@ -231,7 +231,7 @@ flavorDimensions = ['wearos','libreVersion','SiBionics', 'DexCom','Google']
         si {
       dimension 'SiBionics'
         versionNameSuffix '-si'
-        versionCode 913 
+        versionCode 921 
        buildConfigField 'int', 'SiBionics', '1'
        externalNativeBuild.cmake {
          cppFlags "   -DSIBIONICS=1 "
@@ -240,7 +240,7 @@ flavorDimensions = ['wearos','libreVersion','SiBionics', 'DexCom','Google']
         }
         nosi {
             dimension 'SiBionics'
-         versionCode 913 
+         versionCode 921 
          versionNameSuffix '-nosi'
           buildConfigField 'int', 'SiBionics', '0'
           externalNativeBuild.cmake {
@@ -258,9 +258,9 @@ flavorDimensions = ['wearos','libreVersion','SiBionics', 'DexCom','Google']
         minSdk = 26
         buildConfigField 'int', 'minSDK', '26'
         manifestPlaceholders["minSDK"] = '26'
-        versionCode 914 //WATCH
+        versionCode 922 //WATCH
     //******  Zet op rollout op 100% ******
-        //versionName '11.3.0-wear'
+        //versionName '11.4.1-wear'
         versionNameSuffix '-wear'
         signingConfig signingConfigs.alg
 
@@ -268,6 +268,7 @@ flavorDimensions = ['wearos','libreVersion','SiBionics', 'DexCom','Google']
            buildConfigField 'int', 'isWear', '1'
             externalNativeBuild.cmake {
             arguments "-DWEAROS=TRUE"
+                arguments "-DCLARITY=OFF"
                 cppFlags " -DWEAROS=1  -DUSEDIN=1   "
                 cFlags " -DWEAROS=1  -DUSEDIN=1   "
 
@@ -278,14 +279,15 @@ flavorDimensions = ['wearos','libreVersion','SiBionics', 'DexCom','Google']
 
 //        minSdk 19
             dimension 'wearos'
-        versionCode 914 //WATCH
-        //versionName '11.3.0-small'
+        versionCode 922 //WATCH
+        //versionName '11.4.1-small'
         versionNameSuffix '-small'
         signingConfig signingConfigs.alg
 
            buildConfigField 'int', 'isWear', '1'
             externalNativeBuild.cmake {
-            arguments "-DWEAROS=TRUE"
+                arguments "-DWEAROS=TRUE"
+                arguments "-DCLARITY=OFF"
                 cppFlags " -DWEAROS=1  -DUSEDIN=1   "
                 cFlags " -DWEAROS=1  -DUSEDIN=1   "
 
@@ -296,6 +298,13 @@ flavorDimensions = ['wearos','libreVersion','SiBionics', 'DexCom','Google']
             dimension 'wearos'
            versionNameSuffix '-phone'
            buildConfigField 'int', 'isWear', '0'
+
+
+            externalNativeBuild.cmake {
+                arguments "-DCLARITY=ON"
+                arguments "-DCLARITY_ARM32_MERGED=ON"
+                arguments "-DCLARITY_ARM64_MERGED=ON"
+                }
         }
     }
 

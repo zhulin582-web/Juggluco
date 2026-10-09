@@ -21,11 +21,13 @@
 
 
 #include "nums/numdata.hpp"
+#include "net/clarity/clarity.hpp"
 #include "fromjava.h"
 extern vector<Numdata*> numdatas;
 
 extern "C" JNIEXPORT void JNICALL fromjava(closeNums)(JNIEnv *env, jclass thiz,jlong ptr) {
 	Numdata *numdata=reinterpret_cast<Numdata *>(ptr);
+	claritynumsremove(numdata);
 	for (auto it = numdatas.begin(); it != numdatas.end(); ++it) {
 		if(*it==numdata) {
 			numdatas.erase(it);

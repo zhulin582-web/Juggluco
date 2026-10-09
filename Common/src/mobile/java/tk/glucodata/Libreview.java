@@ -95,6 +95,7 @@ import static tk.glucodata.NightPost.success;
 import static tk.glucodata.util.getlocale;
 
 public class Libreview  {
+private static final boolean doTest=doLog;
    private static final String LOG_ID="Libreview";
 private static final Object libreReceiverLock=new Object();
 private static boolean libreReceiverBusy=false;
@@ -151,19 +152,22 @@ public static boolean retrieveLibreReceiverID() {
       synchronized(libreReceiverLock) { libreReceiverBusy=false; }
       }
    }
-   /*
 private static boolean testLibreReceiverCrypto() {
-   if(android.os.Looper.myLooper()==android.os.Looper.getMainLooper())
-      return libreReceiverFailed("Crypto selftest must run on a worker thread");
-   try {
-      LibreReceiverApi.selftest(Applic.app);
-      return true;
-      }
-   catch(Exception | LinkageError ex) {
-      return libreReceiverFailed(ex.getClass().getSimpleName()+": "+ex.getMessage());
-      }
+    if(doTest) {
+       if(android.os.Looper.myLooper()==android.os.Looper.getMainLooper())
+          return libreReceiverFailed("Crypto selftest must run on a worker thread");
+       try {
+          LibreReceiverApi.selftest(Applic.app);
+          return true;
+          }
+       catch(Exception | LinkageError ex) {
+          return libreReceiverFailed(ex.getClass().getSimpleName()+": "+ex.getMessage());
+          }
+        }
+    else {
+        return false;
+        }
    }
-*/
 private static String getputtext(String sensorid,String usertoken,String gateway) {
  return "{\"DomainData\":\"{\\\"activeSensor\\\":\\\""+sensorid+"\\\"}\",\"UserToken\":\""+usertoken +"\",\"Domain\":\"Libreview\",\"GatewayType\":\""+gateway+"\"}";
  }
@@ -238,11 +242,10 @@ private static boolean stopLibreviewUploads(final String status) {
    }
 
 @Keep
-static boolean putsensor(boolean libre3,byte[] textbytes) {
+static int putsensor(boolean libre3,byte[] textbytes,int i) {
    if(librestatus==nothing||librestatus==success)
       librestatus=datestr(System.currentTimeMillis())+" start putsensor";
    try {
-   for(int i=0;i<3;i++) {
       final String gateway=getlibregateway(libre3);
       final String baseurl=getlibrebaseurl(libre3);
       URL url = new URL(baseurl+"/api/nisperson");
@@ -261,38 +264,40 @@ static boolean putsensor(boolean libre3,byte[] textbytes) {
       if(status!=0) {
          String reason=object.getString("reason");
          if(status==20) {
-            if(reason!=null&&reason.contains("wrongDeviceInToken")) {
+            String lowreason=reason.toLowerCase(Locale.US);
+            if(reason!=null&&(lowreason.contains("wrongdeviceintoken")||lowreason.contains("invalid"))) {
                switch(i) {
                   case 0:{
                   if(!postgetauth(libre3)) {
-                       if(!libreconfig(libre3,false)) return false;
-                       i=1;
+                       if(!libreconfig(libre3,false)) 
+                          return -1;
+                       return 2;
                        }
-                     };break;
+                      };
+                     return 1;
                     case 1: {
                      if(!libreconfig(libre3,false))
-                        return false;
-                     };break;
+                        return -1;
+                     };
+                     return 2;
                   default: {
                      librestatus="putsensor  reason="+reason;
-                     return false;
+                     return -1;
                      }
 
                   }
-               continue;
                }
             }
 
          librestatus="putsensor: status="+status+(reason==null?"":(" reason="+reason));
+         return -1; 
          }
-      return status==0;
-        }
-   return false;
+      return 0;
       }  
    catch(Throwable th) {
       librestatus="putsensor "+ stackline(th);
       Log.e(LOG_ID,librestatus);
-      return false;
+      return -1;
       }
    }
 static String getlibregateway(boolean libre3) {
@@ -339,7 +344,7 @@ static boolean postgetauth(boolean libre3) {
    {if(doLog) {Log.i(LOG_ID,"postgetauth "+login+" "+password);};};
 
    var loc= Locale.getDefault();
-   String language=loc.getLanguage()+'-'+loc.getCountry();
+   String language=loc.getLanguage()+'-'+tk.glucodata.util.getCountry();
    String culture=language;
    String setdevice="false";
    
@@ -468,13 +473,15 @@ static boolean postmeasurements(byte[] measurementdata) {
 static String posttime=null;
 @Keep
 static boolean postmeasurements(boolean libre3,byte[] measurementdata) {
-/*
-    if(!Libreview.testLibreReceiverCrypto()) {
-        Log.e("LibreReceiver", Libreview.getLibreReceiverError());
-      }
-   else
-        Log.i("LibreReceiver", "Crypto self-test: PASS");
-*/
+
+    if(doTest) {
+        if(!Libreview.testLibreReceiverCrypto()) {
+            Log.e("LibreReceiver", Libreview.getLibreReceiverError());
+          }
+       else
+            Log.i("LibreReceiver", "Crypto self-test: PASS");
+        }
+
    lastFailurePermanent=false;
    String nowstr=datestr(System.currentTimeMillis());
    if(librestatus==nothing||librestatus==success)
@@ -496,7 +503,8 @@ static boolean postmeasurements(boolean libre3,byte[] measurementdata) {
          urlConnection.setRequestProperty("Abbott-ADC-App-Platform","Android/"+((Object) Build.VERSION.RELEASE) +"/FSL3/3.3.0.9092");
  
          var loc= Locale.getDefault();
-         String language=loc.getLanguage()+'-'+loc.getCountry();
+         String language=loc.getLanguage()+'-'+tk.glucodata.util.getCountry();
+ 
          urlConnection.setRequestProperty("Accept-Language",language);
          final String newYuApiKey=getnewYuApiKey(libre3);
          urlConnection.setRequestProperty("x-api-key", newYuApiKey);

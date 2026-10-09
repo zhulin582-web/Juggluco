@@ -292,7 +292,7 @@ static bool uploadCGM() {
             LOGGER("%d: positer=%d\n",sensorid,positer);
             int left=len-positer;
             if(left>=0) {
-constexpr const int            maxitems=10440;
+constexpr const int            maxitems=5000;
                 if(left>maxitems) {
                     left=maxitems;
                     len=positer+left;

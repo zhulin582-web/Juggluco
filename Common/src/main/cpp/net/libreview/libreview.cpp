@@ -386,7 +386,7 @@ extern bool hour24clock;
     }
 
 
-static bool putsensor(bool libre3,const char *sensorid);
+static int putsensor(bool libre3,const char *sensorid,int kind);
 bool putwhenneeded(bool libre3,SensorGlucoseData *sensdata) {
     if(!sensdata) {
         return true;
@@ -395,10 +395,16 @@ bool putwhenneeded(bool libre3,SensorGlucoseData *sensdata) {
         time_t nu=time(nullptr)    ;
         const char *sensorid= sensdata->showsensorname().data();
         if(nu<sensdata->officialendtime()) {
-            if(!(sensdata->getinfo()->putsensor=putsensor(libre3,sensorid))) {
+            int kind=0;
+            do {
+                   kind=putsensor(libre3,sensorid,kind);
+                    } while(kind>0);
+            
+            if(kind<0) {
                 LIBRELOGGER("putsensor %s failed\n",sensorid);
                 return false;
                 }
+            sensdata->getinfo()->putsensor=true;
             LIBRELOGGER("putsensor %s succeeded\n",sensorid);
             return true;
             }
@@ -893,11 +899,11 @@ static bool putsensor(const char *sensorid) {
         env->DeleteLocalRef(jsensorid);
     return res;
     } */
-static bool putsensor(bool libre3,const char *sensorid) {
+static int putsensor(bool libre3,const char *sensorid,int kind) {
     JNIEnv *env=getenv();
-    static jmethodID  putsensor=env->GetStaticMethodID(libreviewclass,"putsensor","(Z[B)Z");
+    static jmethodID  putsensor=env->GetStaticMethodID(libreviewclass,"putsensor","(Z[BI)I");
     jbyteArray message=libre3?getlibre3puttext(env, sensorid):getlibre2puttext(env, sensorid);
-    bool res=env->CallStaticBooleanMethod(libreviewclass,putsensor,libre3,message); 
+    int res=env->CallStaticIntMethod(libreviewclass,putsensor,libre3,message,kind); 
     env->DeleteLocalRef(message);
     return res;
     }

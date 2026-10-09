@@ -1,0 +1,13 @@
+# The JNI surface exists in every flavor; native providers support ARM32/ARM64.
+target_sources(g PRIVATE "${CMAKE_CURRENT_LIST_DIR}/juggluco.cpp")
+option(CLARITY "Enable the experimental native Dexcom Clarity uploader" OFF)
+if(CLARITY AND NOT WEAROS AND ANDROID_ABI MATCHES "^(arm64-v8a|armeabi-v7a)$")
+    option(CLARITY_ARM32_MERGED "Use the combined Libre/Clarity ARM32 library" OFF)
+    option(CLARITY_ARM64_MERGED "Use the combined Libre/Clarity ARM64 library" OFF)
+    set(CLARITY_PROVIDER_LIBRARY "liblibre_receiver_skb.so")
+    add_subdirectory("${CMAKE_CURRENT_LIST_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/clarity")
+    target_compile_definitions(clarity_core PRIVATE CLARITY_JUGGLUCO_LOG=1)
+    target_sources(g PRIVATE "${CMAKE_CURRENT_LIST_DIR}/transport.cpp")
+    target_compile_definitions(g PRIVATE JUGGLUCO_CLARITY=1)
+    target_link_libraries(g PRIVATE clarity_core)
+endif()

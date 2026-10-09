@@ -89,7 +89,7 @@ typedef struct {
     uint16_t uncapped_historic_mgdl;
 
     bool     temperature_valid;    /* false when temperature == 0x8000        */
-    int16_t  temperature_centi;    /* temperature in units of 1/100 degC      */
+    uint16_t temperature_centi;    /* unsigned 1/100 degC, as in the app       */
 } lingo_realtime_t;
 
 /*

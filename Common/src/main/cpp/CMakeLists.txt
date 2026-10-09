@@ -373,6 +373,7 @@ set(NO_TESTS  ON CACHE BOOL "Disable tests build" FORCE)
 add_subdirectory(libjuice)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/jgchat/android/integration.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/net/clarity/integration.cmake")
 
 #if(ANDROID AND NOT WEAROS)
 #    include("${CMAKE_CURRENT_SOURCE_DIR}/jgice/android/integration.cmake")

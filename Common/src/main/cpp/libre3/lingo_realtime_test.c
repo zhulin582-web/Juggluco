@@ -211,6 +211,22 @@ int main(void) {
     }
     printf("[rate/trend] captured frames, both channels, flags and invalid input: OK\n");
 
+    /* The app masks getShort() with 0xffff before converting temperature.
+     * Keep 0x8000 as the invalid sentinel; other high-bit values stay unsigned. */
+    {
+        uint8_t buf[LINGO_REALTIME_LEN] = {0};
+        const uint16_t temperatures[] = {0, 3054, 32767, 0x8000, 32769, 65535};
+        for (size_t i = 0; i < sizeof(temperatures)/sizeof(temperatures[0]); ++i) {
+            const uint16_t raw = temperatures[i];
+            buf[37] = (uint8_t)raw;
+            buf[38] = (uint8_t)(raw >> 8);
+            lingo_realtime_t r;
+            assert(lingo_parse_realtime(buf, sizeof(buf), &r) == 0);
+            assert(r.temperature_valid == (raw != 0x8000));
+            assert(r.temperature_centi == (raw == 0x8000 ? 0 : raw));
+        }
+    }
+
     if (failures) { printf("\n%d FAILURE(S)\n", failures); return 1; }
     printf("\nall lingo_realtime tests passed\n");
     return 0;

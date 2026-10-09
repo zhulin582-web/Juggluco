@@ -133,7 +133,7 @@ int lingo_parse_realtime(const uint8_t *plain, size_t len, lingo_realtime_t *out
         out->temperature_centi = 0;
     } else {
         out->temperature_valid = true;
-        out->temperature_centi = (int16_t)temp;
+        out->temperature_centi = temp;
     }
 
     return 0;

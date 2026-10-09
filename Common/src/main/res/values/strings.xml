@@ -640,4 +640,46 @@
     <string name="garmin_alarm_invalid">Check the values: low must be below high; missing-value delay 1–4095 minutes, repeat 0–4095 minutes, duration 0–65535 seconds.</string>
     <string name="garmin_alarm_newer">The watch has newer alarm settings. Saving here replaces them.</string>
 
+
+    <string name="clarity_login_instructions">Sign in on Dexcom\'s page with your account email or username and password.</string>
+    <string name="clarity_login_country">2-letter country code</string>
+    <string name="clarity_sign_in">Sign in to Dexcom</string>
+    <string name="clarity_login_finish_pending">Finish pending sign-in</string>
+    <string name="clarity_login_tls_error">Dexcom\'s secure connection could not be verified.</string>
+    <string name="clarity_login_load_error">Could not load Dexcom\'s sign-in page.</string>
+    <string name="clarity_login_http_error">Dexcom\'s sign-in page returned HTTP %1$d.</string>
+    <string name="clarity_login_destination_error">The sign-in page requested an unsupported destination.</string>
+    <string name="clarity_login_start_error">Cannot start Dexcom sign-in.</string>
+    <string name="clarity_login_in_progress">A sign-in is still completing. Wait, then try Finish pending sign-in.</string>
+    <string name="clarity_login_completing">Completing Dexcom sign-in…</string>
+    <string name="clarity_login_complete_error">Cannot complete Dexcom sign-in.</string>
+    <string name="clarity_login_retry_error">%1$s\nIf credentials were accepted, try Finish pending sign-in; otherwise sign in again.</string>
+    <string name="clarity_last_ack">Last acknowledgment: %1$s</string>
+    <string name="clarity_ack_count">Sensor glucose acknowledged: %1$d</string>
+    <string name="clarity_ack_latest">Latest acknowledged reading: %1$s</string>
+    <string name="clarity_pending_glucose">Pending glucose: %1$d, %2$s to %3$s</string>
+    <string name="clarity_read_settings_error">Cannot read Clarity settings</string>
+    <string name="clarity_send_enabled">Send to Clarity</string>
+    <string name="clarity_use_history">Use Libre 3 history</string>
+    <string name="clarity_start_date">Start: %1$s</string>
+    <string name="clarity_change_start_title">Change Clarity start date?</string>
+    <string name="clarity_change_start_message">Use %1$s? An earlier date sends eligible older data that has not been acknowledged. A later date skips unsent older data. Acknowledged data and pending batches are kept; this does not erase or reset Clarity history.\n\nPress Save on the Clarity screen to apply.</string>
+    <string name="clarity_categories">Categories</string>
+    <string name="clarity_save_settings_error">Cannot save Clarity settings</string>
+    <string name="clarity_category_choose">Choose a category</string>
+    <string name="clarity_category_fast">Fast insulin</string>
+    <string name="clarity_category_long">Long insulin</string>
+    <string name="clarity_category_carbs">Carbohydrate</string>
+    <string name="clarity_category_comment">Comment</string>
+    <string name="clarity_category_not">Not (do not send)</string>
+    <string name="clarity_category_blood">Glucose measurement</string>
+    <string name="clarity_read_labels_error">Cannot read labels; reopen Categories</string>
+    <string name="clarity_category_label">%1$s: %2$s</string>
+    <string name="clarity_category_carbs_weight">%1$s (×%2$s g)</string>
+    <string name="clarity_change_blood_first">First change the glucose measurement category of %1$s</string>
+    <string name="clarity_grams_per_unit">Grams per unit: %1$s</string>
+    <string name="clarity_positive_number">Enter a positive number</string>
+    <string name="clarity_labels_changed">Labels changed; reopen Categories</string>
+    <string name="clarity_save_categories_error">Cannot save categories</string>
+    <string name="clarity_login_success">Signed in. Use Back to return to Clarity settings.</string>
 </resources>

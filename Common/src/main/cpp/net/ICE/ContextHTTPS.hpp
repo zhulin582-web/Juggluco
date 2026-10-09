@@ -21,13 +21,20 @@
 #pragma once 
 #include <vector>
 #include <string_view>
+#include <string>
 #include <span>
 #include <openssl/ssl.h>
 
 using namespace std::literals;
+// Borrowed only for one connection. Never installed on the shared SSL_CTX.
+struct HttpsClientIdentity {
+    X509 *certificate;
+    EVP_PKEY *privateKey;
+    X509 *issuer;
+};
 class ContextHTTPS {
 private:
-    SSL_CTX* ctx ;
+    SSL_CTX* ctx=nullptr;
     bool error=false;
 static bool initLibrary();
 public:
@@ -35,7 +42,8 @@ public:
     static ContextHTTPS &getContext() ;
     ContextHTTPS();
     ~ContextHTTPS();
-std::pair<std::vector<char>,int>request(const std::string_view host,int port,const std::string_view path,const std::string_view TYPE,const std::span<const char> input, const std::string_view header={});
+// Location is optional output; following redirects is the caller's decision.
+std::pair<std::vector<char>,int>request(const std::string_view host,int port,const std::string_view path,const std::string_view TYPE,const std::span<const char> input, const std::string_view header={}, std::string *location=nullptr, const HttpsClientIdentity *client=nullptr);
 std::pair<std::vector<char>,int>   getRequest(const std::string_view host,int port,const std::string_view path,const std::span<const char> input={}, const std::string_view header={})  {
     return  request(host, port,path,"GET"sv, input,header) ;
     }

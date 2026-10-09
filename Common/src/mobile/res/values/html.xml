@@ -1203,7 +1203,8 @@ button. The period ends at the time of the end of screen position and
 spans the specified number of days back in time. All data are only
 based on glucose values received every minute via Bluetooth from the
 sensor (called <i>stream</i> in Juggluco).</p>
-<p>On the left of the screen are the percentages of measurements that fall within certain glucose ranges. The standard ranges are always
+<p>On the left of the screen are the percentages of measurements that
+fall within certain glucose ranges. The standard ranges are always
 shown. When a non-standard target range is specified in <a href="https://www.juggluco.nl/Jugglucohelp/displayhelp.html">left
 menu-&gt;Settings-&gt;Display</a>, the time in range of that target
 range is displayed below the standard ranges.</p>
@@ -1211,34 +1212,40 @@ range is displayed below the standard ranges.</p>
 <p>The percentage of time Juggluco received glucose values from the
 sensor.</p>
 <h3 class="western">Estimated A1C</h3>
-<p>Estimates HbA1c from the average glucose using an older formula (Nathan et al., 2008). See
-<a href="https://professional.diabetes.org/diapro/glucose_calc">https://professional.diabetes.org/diapro/glucose_calc</a></span>
+<p>Estimates HbA1c from the average glucose using an older formula
+(Nathan et al., 2008). See
+<a href="https://professional.diabetes.org/diapro/glucose_calc">https://professional.diabetes.org/diapro/glucose_calc</a>
 <span lang="en-US">for a calculator.</span></p>
-<p><span lang="en-US">It is shown here in</span> <span lang="en-US">case
-people are looking for the value shown in Abbott\'s Libre</span> <span lang="en-US">2
-app. GMI is a 2018 replacement for this indicator. </span>
+<p><span lang="en-US"><b>Glucose Management Indicator (GMI)</b></span><span lang="en-US">
+is a 2018 replacement for this indicator. </span>
 </p>
-<h3 class="western">Glucose Management Indicator (GMI)</h3>
-<p><span lang="en-US">Calculated from the average glucose with a
-certain generally used formula (see <a href="https://www.jaeb.org/gmi/">https://www.jaeb.org/gmi/</a>).
-It is an empirically determined prediction of HbA1c (also called
-A1c), given in percentage and mmol/mol.</span> <span lang="en-US">For
-me personally Estimated A1C is a better predictor than GMI, but GMI is
-used in Abbott\'s Libre 3 app.</span></p>
+<h3 class="western">uGMI</h3>
+<p><span lang="en-US">The updated GMI is a 2026 replacement of the 2018
+formula and is for the average glucose of diabetic patients
+practically identical to Estimated A1C (see curves in web version).
+The GMI calculator is updated to this formula:
+</span><span lang="en-US"><a href="https://www.jaeb.org/gmi/">https://www.jaeb.org/gmi/</a>.
+</span><span lang="en-US">See
+<a href="https://link.springer.com/article/10.1007/s00125-026-06739-w">https://link.springer.com/article/10.1007/s00125-026-06739-w</a>
+for more information.  Abbotts Libreview and Dexcom Clarity still
+show the old GMI.</span></p>
 <h3 class="western">Glucose Variability:</h3>
 <p>The coefficient of variation, %CV=(SD/mean)*100%, as a measure of
-glucose variability.  A higher coefficient of variation means that
-the glucose values are further from the mean. 
+glucose variability. A higher coefficient of variation means that the
+glucose values are further from the mean. 
 </p>
 <h3 class="western">Save</h3>
-<p>This presents a report of your glucose values of the specified days. It contains
-statistics, the overview graph and an image
-of separate days. You can print it to PDF and e-mail it to your healthcare professional. You need to have activated left menu→Settings→Exchange
-data→Web server. It opens url <a href="http://127.0.0.1:17580/x/report">http://127.0.0.1:17580/x/report</a>
-in the web browser.
+<p>This presents a report of your glucose values of the specified
+days. It contains statistics, the overview graph and an image of
+separate days. You can print it to PDF and e-mail it to your
+healthcare professional. You need to have activated left
+menu→Settings→Exchange data→Web server. It opens url
+<a href="http://127.0.0.1:17580/x/report">http://127.0.0.1:17580/x/report</a>
+in the web browser. 
 </p>
 <h3 class="western">Summary graph</h3>
-<p>(Only shown when at least 9 days of stream glucose values are available.)</p>
+<p>(Only shown when at least 9 days of stream glucose values are
+available.)</p>
 <p>All stream glucose values in this period are taken to draw a
 composite graph showing for every minute of the day how glucose
 values were distributed. The black or white median line shows the
@@ -1253,8 +1260,11 @@ blue and the middle dark blue) 5% of the values, below the third line
 (between the darkest blue and middle dark blue) 25 % of values, below
 the black line 50% of values. Followed by 75%, 95% and 100%. 
 </p>
-<p>For aesthetic reasons, the curve is smoothed with a binomial filter.</p>
-<p>Tap anywhere on the screen to close the Summary graph — except the left or right edge, which moves the graph backwards or forwards through the day. The curve can also be moved back and forwards by
+<p>For aesthetic reasons, the curve is smoothed with a binomial
+filter.</p>
+<p>Tap anywhere on the screen to close the Summary graph — except
+the left or right edge, which moves the graph backwards or forwards
+through the day. The curve can also be moved back and forwards by
 scrolling. The time scale can be changed by moving two fingers to or
 from each other.</p>
 ]]>
@@ -3412,9 +3422,35 @@ the following data:</p>
 to represent the data in Juggluco differently and to find or
 calculate something. You can also ask for help with Juggluco or tell
 it something about your diabetes management, but I don’t think that
-you will learn something new, when you ask it for help with your
+you will learn anything new, when you ask it for help with your
 diabetes management.</p>
 <p style="line-height: 100%; margin-bottom: 0in"><br/>
+
+</p>
+]]>
+</string>
+<string name="clarityhelp" >
+<![CDATA[
+<p><a href="https://www.juggluco.nl/Jugglucohelp/index.html">index</a></p><p><a href="https://www.juggluco.nl/Jugglucohelp/de/clarityhelp.html">de</a>&emsp;&emsp;<a href="https://www.juggluco.nl/Jugglucohelp/nl/clarityhelp.html">nl</a>&emsp;&emsp;<a href="https://www.juggluco.nl/Jugglucohelp/clarityhelp.html?lang=en">en</a>&emsp;&emsp;</p><h1>Dexcom Clarity</h1>
+<p>Upload data to Dexcom Clarity.</p>
+<p><b>Sign in to Dexcom</b>: OAuth login to Dexcom via web browser.</p>
+<p><b>Send to Clarity</b>: After logging into Dexcom, you can turn on
+sending data to Clarity.</p>
+<p><b>Use Libre 3 history</b>: Send the History data of Libre 3
+sensor to Clarity instead of the Stream data.</p>
+<p><b>Send amounts</b>: Sends amounts and finger-stick blood glucose.
+You first need to specify what label is what, see below.</p>
+<p><b>Categories</b>: Specify which labels signify “fast insulin”,
+“long insulin”, “Glucose measurement” or “Carbohydrate”.</p>
+<p><b>Change start</b>: Change the date from which data is send to
+Dexcom Clarity.</p>
+<p><b>Send now</b>: Send data now to Dexcom Clarity.</p>
+<p><br/>
+<br/>
+
+</p>
+<p><br/>
+<br/>
 
 </p>
 ]]>

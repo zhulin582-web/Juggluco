@@ -55,6 +55,8 @@ import static tk.glucodata.Log.doLog;
 
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.ContextCompat;
+import androidx.core.app.LocaleManagerCompat;
+import androidx.core.os.LocaleListCompat;
 
 public class util {
 private	static DateFormat dformat;
@@ -263,4 +265,11 @@ static void sleep(long msec) {
        Thread.currentThread().interrupt();
    }
 }
+
+
+static public String  getCountry() {
+    LocaleListCompat locales = LocaleManagerCompat.getSystemLocales(Applic.app);
+    Locale locale = locales.get(0);
+    return locale == null ? "" : locale.getCountry();
+    }
 }

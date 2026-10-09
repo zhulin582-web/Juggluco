@@ -46,6 +46,8 @@ static constexpr const	int levels[] {250,180,69,53};
 	int GMImmol{};
 	double EA1Cper{};
 	int EA1Cmmol{};
+	double uGMIper{};
+	int uGMImmol{};
 	double active{};
 	uint32_t starttime=UINT32_MAX,endtime=0;
 
@@ -151,7 +153,8 @@ template <typename GlucoseIterator> stats( std::vector<GlucoseDataType<GlucoseIt
 		GMImmol=round(12.71 + 4.70587 *mean/18.0182);
 		EA1Cper= (46.7 + mean)/28.7;
 		EA1Cmmol=round(( EA1Cper- 2.15)*10.929);
-
+        uGMIper = mean / (15.36 + 0.0425 * mean);
+        uGMImmol = round( mean / (1.4070016 + 0.003889 * mean) - 23.497);
 		this->mean=mean;
 		LOGGER("stats::stats mean=%Lf, sd=%1f vc=%1f starttime=%u endtime=%u\n",mean,sd,vc,starttime,endtime);
 		}

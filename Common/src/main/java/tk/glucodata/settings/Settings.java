@@ -1698,6 +1698,8 @@ static private void exchanges(MainActivity context, View parent) {
         var nfcemu=getbutton(context,"NFC emu");
         nfcemu.setOnClickListener(v -> tk.glucodata.Libre3NfcEmulator.starttestemu());
         */
+        var clarity = getbutton(context, "Dexcom Clarity");
+        clarity.setOnClickListener(v -> tk.glucodata.Clarity.show(context,thelayout[0]));
         var uploader = getbutton(context, R.string.uploader);
         uploader.setOnClickListener(v -> tk.glucodata.NightPost.config(context, thelayout[0]));
         final CheckDirectionBox librelinkbroadcast = new CheckDirectionBox(context);
@@ -1780,12 +1782,11 @@ static private void exchanges(MainActivity context, View parent) {
         lay = new Layout(context, (l, w, h) -> {
             int[] ret = {w, h};
             return ret;
-        }, new View[]{everSensebroadcast,librelinkbroadcast},new View[]{xdripbroadcast, jugglucobroadcast}, new View[]{webserver, uploader, libreview}, (Build.VERSION.SDK_INT >= 28) ? new View[]{healthconnect,exportview,mirrorview} :new View[]{exportview,mirrorview},
-                /*new View[]{emulator},*/new View[]{help,meters, ok})
+        }, new View[]{everSensebroadcast,librelinkbroadcast},new View[]{xdripbroadcast, jugglucobroadcast},Build.VERSION.SDK_INT >= 28 ?new View[]{healthconnect,clarity,libreview}:new View[]{clarity,libreview}, new View[]{webserver, uploader,exportview,mirrorview} ,                /*new View[]{emulator},*/new View[]{help,meters, ok})
             .portraitLayout(
                 new View[]{everSensebroadcast},new View[]{librelinkbroadcast},
                 new View[]{xdripbroadcast},new View[]{jugglucobroadcast},
-                new View[]{webserver,uploader},new View[]{libreview},
+                new View[]{webserver,uploader},new View[]{clarity,libreview},
                 (Build.VERSION.SDK_INT >= 28)?new View[]{healthconnect}:null,
                 new View[]{exportview,mirrorview},/*new View[]{emulator},*/new View[]{help,meters},new View[]{ok});
 

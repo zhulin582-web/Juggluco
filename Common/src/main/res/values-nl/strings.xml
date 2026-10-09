@@ -595,5 +595,50 @@
 <string name="garmin_alarm_save_failed">Kon alarminstellingen niet opslaan. Probeer het opnieuw.</string>
 <string name="garmin_alarm_invalid">Controleer de waarden: de lage waarde moet lager zijn dan de hoge waarde; vertraging bij ontbrekende waarde 1–4095 minuten, herhaling 0–4095 minuten, duur 0–65535 seconden.</string>
 <string name="garmin_alarm_newer">Het horloge bevat nieuwere alarminstellingen. Als je deze hier opslaat, worden ze overschreven.</string>
+
+<string name="clarity_login_instructions">Meld je aan op de pagina van Dexcom met het e-mailadres of de gebruikersnaam en het wachtwoord van je account.</string>
+<string name="clarity_login_country">Landcode van 2 letters</string>
+<string name="clarity_sign_in">Aanmelden bij Dexcom</string>
+<string name="clarity_login_finish_pending">Openstaande aanmelding voltooien</string>
+<string name="clarity_login_tls_error">De beveiligde verbinding van Dexcom kon niet worden geverifieerd.</string>
+<string name="clarity_login_load_error">De aanmeldingspagina van Dexcom kon niet worden geladen.</string>
+<string name="clarity_login_http_error">De aanmeldingspagina van Dexcom gaf HTTP %1$d terug.</string>
+<string name="clarity_login_destination_error">De aanmeldingspagina vroeg om een niet-ondersteunde bestemming.</string>
+<string name="clarity_login_start_error">Aanmelding bij Dexcom kan niet worden gestart.</string>
+<string name="clarity_login_in_progress">Er wordt nog steeds een aanmelding voltooid. Wacht even en probeer vervolgens \'Openstaande aanmelding voltooien\'.</string>
+<string name="clarity_login_completing">Aanmelding bij Dexcom wordt voltooid…</string>
+<string name="clarity_login_complete_error">Aanmelding bij Dexcom kan niet worden voltooid.</string>
+<string name="clarity_login_retry_error">%1$s\nAls de inloggegevens zijn geaccepteerd, probeer dan \'Openstaande aanmelding voltooien\'; meld je anders opnieuw aan.</string>
+<string name="clarity_last_ack">Laatste bevestiging: %1$s</string>
+<string name="clarity_ack_count">Bevestigde sensorglucosewaarden: %1$d</string>
+<string name="clarity_ack_latest">Laatst bevestigde waarde: %1$s</string>
+<string name="clarity_pending_glucose">Glucose in afwachting: %1$d, %2$s tot %3$s</string>
+<string name="clarity_read_settings_error">Kan Clarity-instellingen niet lezen</string>
+<string name="clarity_send_enabled">Zend naar Clarity</string>
+<string name="clarity_use_history">Libre 3-geschiedenis gebruiken</string>
+<string name="clarity_start_date">Start: %1$s</string>
+<string name="clarity_change_start_title">Startdatum Clarity wijzigen?</string>
+<string name="clarity_change_start_message">%1$s gebruiken? Bij een eerdere datum worden geschikte oudere gegevens verzonden die nog niet zijn bevestigd. Bij een latere datum worden niet-verzonden oudere gegevens overgeslagen. Bevestigde gegevens en batches in afwachting blijven behouden; hiermee wordt de Clarity-geschiedenis niet gewist of gereset.\n\nTik op Opslaan in het Clarity-scherm om de wijzigingen toe te passen.</string>
+
+<string name="clarity_categories">Categorieën</string>
+<string name="clarity_save_settings_error">Kan Clarity-instellingen niet opslaan</string>
+<string name="clarity_category_choose">Kies een categorie</string>
+<string name="clarity_category_fast">Snelwerkende insuline</string>
+<string name="clarity_category_long">Langwerkende insuline</string>
+<string name="clarity_category_carbs">Koolhydraten</string>
+<string name="clarity_category_comment">Opmerking</string>
+<string name="clarity_category_not">Niet (niet verzenden)</string>
+<string name="clarity_category_blood">Glucosemeting</string>
+<string name="clarity_read_labels_error">Kan labels niet lezen; open Categorieën opnieuw</string>
+<string name="clarity_category_label">%1$s: %2$s</string>
+<string name="clarity_category_carbs_weight">%1$s (×%2$s g)</string>
+<string name="clarity_change_blood_first">Wijzig eerst de categorie voor glucosemeting van %1$s</string>
+<string name="clarity_grams_per_unit">Gram per eenheid: %1$s</string>
+<string name="clarity_positive_number">Voer een positief getal in</string>
+<string name="clarity_labels_changed">Labels gewijzigd; open Categorieën opnieuw</string>
+<string name="clarity_save_categories_error">Kan categorieën niet opslaan</string>
+<string name="clarity_login_success">Ingelogd. Gebruik \'Terug\' om naar de Clarity-instellingen te gaan.</string>
+
+
 </resources>
 

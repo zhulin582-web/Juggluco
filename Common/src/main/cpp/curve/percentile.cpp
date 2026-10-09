@@ -969,6 +969,9 @@ int stats::otherstats(NVGcontext* vg,JCurve &jcurve,const jugglucotext *usedtext
     len=snprintf(buf,maxbuf,portrait?"GMI: %.1f%% (%d mmol/mol)":usedtext->GMI,GMIper, GMImmol);
     nvgText(vg, xpos,ypos,buf,buf+len);
     ypos+=rowheight;
+    len=snprintf(buf,maxbuf,"uGMI: %.1f%% (%d mmol/mol)",uGMIper, uGMImmol);
+    nvgText(vg, xpos,ypos,buf,buf+len);
+    ypos+=rowheight;
     len=snprintf(buf,maxbuf,usedtext->SD,jcurve.gconvert(sd*10));
     nvgText(vg, xpos,ypos,buf,buf+len);
     ypos+=rowheight;
@@ -1486,11 +1489,13 @@ static bool writeStatisticsJson(StatisticsWriter &writer,const stats &stat,int u
     const double targetlow=statisticsGlucose(stat.border[1]+1,unit);
     const double targethigh=statisticsGlucose(stat.border[0],unit);
     const char *unitlabel=unit==1?"mmol/L":"mg/dL";
-    return writer.appendformat(R"JSON({"schemaVersion":1,"source":"%.*s","calibrated":%s,"startTime":%u,"endTime":%u,"durationDays":%.10g,"measurementCount":%d,"expectedMeasurementCount":%d,"timeActivePercent":%.10g,"glucoseUnit":"%s","meanGlucose":%.10g,"estimatedA1c":{"percent":%.10g,"mmolMol":%d},"gmi":{"percent":%.10g,"mmolMol":%d},"standardDeviation":%.10g,"coefficientOfVariationPercent":%.10g,"targetRange":{"minimum":%.10g,"maximum":%.10g,"measurementCount":%d,"percent":%.10g},"ranges":[{"name":"veryHigh","minimum":%.10g,"maximum":null,"measurementCount":%d,"percent":%.10g},{"name":"high","minimum":%.10g,"maximum":%.10g,"measurementCount":%d,"percent":%.10g},{"name":"standard","minimum":%.10g,"maximum":%.10g,"measurementCount":%d,"percent":%.10g},{"name":"low","minimum":%.10g,"maximum":%.10g,"measurementCount":%d,"percent":%.10g},{"name":"veryLow","minimum":null,"maximum":%.10g,"measurementCount":%d,"percent":%.10g}]})JSON",
+    return writer.appendformat(R"JSON({"schemaVersion":1,"source":"%.*s","calibrated":%s,"startTime":%u,"endTime":%u,"durationDays":%.10g,"measurementCount":%d,"expectedMeasurementCount":%d,"timeActivePercent":%.10g,"glucoseUnit":"%s","meanGlucose":%.10g,"estimatedA1c":{"percent":%.10g,"mmolMol":%d},"gmi":{"percent":%.10g,"mmolMol":%d},"ugmi":{"percent":%.10g,"mmolMol":%d},"standardDeviation":%.10g,"coefficientOfVariationPercent":%.10g,"targetRange":{"minimum":%.10g,"maximum":%.10g,"measurementCount":%d,"percent":%.10g},"ranges":[{"name":"veryHigh","minimum":%.10g,"maximum":null,"measurementCount":%d,"percent":%.10g},{"name":"high","minimum":%.10g,"maximum":%.10g,"measurementCount":%d,"percent":%.10g},{"name":"standard","minimum":%.10g,"maximum":%.10g,"measurementCount":%d,"percent":%.10g},{"name":"low","minimum":%.10g,"maximum":%.10g,"measurementCount":%d,"percent":%.10g},{"name":"veryLow","minimum":null,"maximum":%.10g,"measurementCount":%d,"percent":%.10g}]})JSON",
         static_cast<int>(source.size()),source.data(),calibrated?"true":"false",
         stat.starttime,stat.endtime,durationdays,stat.count,stat.totid,stat.active*100.0,
         unitlabel,statisticsGlucose(stat.mean,unit),stat.EA1Cper,stat.EA1Cmmol,
-        stat.GMIper,stat.GMImmol,statisticsGlucose(stat.sd,unit),stat.vc*100.0,
+        stat.GMIper,stat.GMImmol,
+        stat.uGMIper,stat.uGMImmol,
+        statisticsGlucose(stat.sd,unit),stat.vc*100.0,
         targetlow,targethigh,targetcount,stat.pertarget*100.0,
         statisticsGlucose(stats::levels[0]+1,unit),stat.counts[0],stat.pers[0]*100.0,
         statisticsGlucose(stats::levels[1]+1,unit),statisticsGlucose(stats::levels[0],unit),stat.counts[1],stat.pers[1]*100.0,

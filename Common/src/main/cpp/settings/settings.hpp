@@ -430,6 +430,15 @@ struct Tings {
     bool newLibre3Activation;
     bool newLibre3Takeover;
     int64_t newLibre3ReceiverID;
+    // Keep new persistent fields at the end to preserve existing mmap offsets.
+    struct ClaritySettingsData {
+        uint32_t version;
+        uint32_t since;
+        uint8_t enabled;
+        uint8_t libre3History;
+        uint8_t numbers;
+        uint8_t reserved;
+    } clarity;
 
 static bool meterMatch(const struct GlucoseMeter &meter,const std::string_view deviceName,uint8_t *address)  {
     if(address) {

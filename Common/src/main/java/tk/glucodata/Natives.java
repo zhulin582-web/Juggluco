@@ -34,6 +34,15 @@ import tk.glucodata.nums.item;
 
 
 public class Natives  {
+    public static native ClarityStatus clarityStatus();
+    public static native int[] clarityCategories();
+    public static native String claritySetCategories(int[] categories,float[] weights);
+    public static native String clarityConfigure(boolean enabled,boolean libre3History,boolean numbers,long since);
+    public static native String clarityImport(byte[] data);
+    public static native String[] clarityLoginBegin(String country,String locale,String manufacturer,String model,String osVersion);
+    public static native String clarityLoginFinish(String callback);
+    public static native void clarityWake();
+
     public static native String askChatGPT(android.app.Activity activity, String archiveURL, String existingChatURL);
     public static native void stopAskChatGPT();
     public static native String askChatGPTStatus();

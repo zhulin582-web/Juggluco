@@ -34,10 +34,26 @@
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <sys/ioctl.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <chrono>
+#include <atomic>
+#include "HttpResponse.hpp"
 
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
 #include <openssl/x509_vfy.h>
+#ifndef __ANDROID_API__
+// Juggluco's bundled OpenSSL declarations do not include x509v3.h. Including
+// it here can mix those declarations with an incompatible system header in
+// command-line builds. Declare only the two C functions used for peer-name
+// verification; Android resolves these same functions with dlsym below.
+extern "C" {
+int X509_check_host(X509 *cert, const char *name, size_t length,
+                    unsigned int flags, char **peername);
+int X509_check_ip_asc(X509 *cert, const char *ip, unsigned int flags);
+}
+#endif
 #include <openssl/err.h>
 #include "destruct.hpp"
 /*
@@ -113,16 +129,16 @@ static bool doinitcryptofuncs() {
    #define hgetsym(handle,name) *((void **)&name##ptr)=dlsym(handle, #name)
    #define getsym(name) hgetsym(handle,name)
 //   #define symtest(name) if(!(getsym(name))) { dlclose(handle);LOGGERHTTPS(#name ": %s\n",dlerror());return false;}
-   #define symtest(name) if(!(getsym(name))) { LOGGERHTTPS(#name ": %s\n",dlerror());}
+   #define symtest(name) if(!(getsym(name))) { LOGGERHTTPSERROR("unavailable TLS symbol " #name ": %s\n",dlerror());}
    void *handle=opencrypto();
    if(!handle)  {
-        LOGARHTTPS("opencrypto() failed");
+        LOGARHTTPSERROR("opencrypto() failed");
         return false;
         }
 #include "cryptosyms.h"
    handle=openssl();
    if(!handle)  {
-        LOGARHTTPS("openssl() failed");
+        LOGARHTTPSERROR("openssl() failed");
         return false;
         }
     #include "sslsyms.h"
@@ -134,17 +150,22 @@ static bool doinitcryptofuncs() {
             TLS_client_methodptr=SSLv23_methodptr;
         }
    LOGGERHTTPS("doinitcryptofuncs end TLS_client_methodptr=%p\n",TLS_client_methodptr);
-    return true;
+    return TLS_client_methodptr && SSL_CTX_newptr && SSL_CTX_freeptr &&
+        SSL_CTX_set_verifyptr && SSL_CTX_load_verify_locationsptr &&
+        SSL_newptr && SSL_freeptr && SSL_set_fdptr && SSL_connectptr &&
+        SSL_get_errorptr && SSL_writeptr && SSL_readptr &&
+        SSL_get_verify_resultptr && SSL_get_peer_certificateptr && X509_freeptr &&
+        (SSL_set_tlsext_host_nameptr || SSL_ctrlptr);
    }
 #include "cryptodefs.h"
 #include "ssldefs.h"
 #endif
 
 static int logcallback(const char *str, size_t len, void *u) {
-    LOGGERHTTPS("logcallback(%.*s,%d,%p)\n",len,str,len,u );
+    LOGGERHTTPS("TLS error queue: %.*s",static_cast<int>(len),str);
     std::string *uit=(std::string *)u;
     uit->append(str,len);
-    return 0;
+    return 1;
     }
 
 
@@ -152,6 +173,9 @@ std::string get_openssl_error_string() {
     std::string uit("");
 
     LOGGERHTTPS("ERR_print_errors_cbptr=%p\n", ERR_print_errors_cb);
+#ifdef DLSYMS_SSL
+    if(ERR_print_errors_cbptr)
+#endif
     ERR_print_errors_cb(logcallback,&uit);
     return uit;
     }
@@ -168,100 +192,20 @@ static bool load_android_cacerts(SSL_CTX* ctx) {
         return false;
         }
 #else
-   constexpr const char ca_dir[] = "/system/etc/security/cacerts";
-//    constexpr const char ca_dir[] = "/data/local/tmp/cacerts";
-    if(SSL_CTX_load_verify_locations(ctx, NULL, ca_dir)) {
-        LOGARHTTPS("SSL_CTX_load_verify_locations Succeeded");
-        return true;
+    bool loaded=false;
+    for(const char *dir:{"/apex/com.android.conscrypt/cacerts","/system/etc/security/cacerts"}) {
+        if(access(dir,R_OK|X_OK)) {
+            // One CA location is normally absent on older/newer Android releases.
+            if(errno!=ENOENT) flerrorHTTPS("access CA directory %s",dir);
+            continue;
         }
-     else {
-        std::string er=get_openssl_error_string();
-        LOGGERHTTPSERROR("SSL_CTX_load_verify_locations failed: %s\n",er.data());
-        return false;
-        }
+        if(SSL_CTX_load_verify_locations(ctx,nullptr,dir)) loaded=true;
+        else LOGGERHTTPSERROR("load CA directory %s failed: %s\n",dir,get_openssl_error_string().c_str());
+    }
+    if(!loaded) LOGARHTTPSERROR("No Android system CA directory could be loaded");
+    return loaded;
 #endif
 }
-/*
-       int flag = 1;
-   setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
-   struct linger l = { .l_onoff = 0, .l_linger = 0 };
-   setsockopt(sock, SOL_SOCKET, SO_LINGER, &l, sizeof(l));
-*/
-
-static void sockopt(int new_fd) {
-//    LOGGER("sockopt(%d)\n",new_fd);
-       const int keepalive = 1;
-       if(setsockopt(new_fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive)) < 0) {
-        flerror("setsockopt(%d,SO_KEEPALIVE, ) failed",new_fd);
-         }
-      int retalive=-4;
-    socklen_t retlen=sizeof(retalive);    
-
-       if(getsockopt(new_fd, SOL_SOCKET, SO_KEEPALIVE, &retalive, &retlen) < 0) {
-        flerror("getsockopt(%d,SO_KEEPALIVE, ) failed",new_fd);
-         }
-//    else LOGGER("KEEPALIVE=%d\n",retalive);
-       const int keepcnt = 1;
-    if(setsockopt(new_fd, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt))<0) {
-        flerror("setsockopt(%d,TCP_KEEPCNT ) failed",new_fd);
-        }
-    retlen=sizeof(retalive);    
-    if(getsockopt(new_fd, IPPROTO_TCP, TCP_KEEPCNT, &retalive, &retlen)<0) {
-        flerror("getsockopt(%d,TCP_KEEPCNT ) failed",new_fd);
-        }
-//       else LOGGER("KEEPCNT=%d\n",retalive);
-//       if(setsockopt(new_fd, IPPROTO_TCP, TCP_SYNCNT, keepcnt)<0)  {
- //       flerror("setsockopt(%d,TCP_SYNCNT) failed",new_fd); }
-       const int keepidle = 10;
-       if(setsockopt(new_fd, IPPROTO_TCP, TCP_KEEPIDLE, &keepidle, sizeof(keepidle)) < 0) {
-        flerror("setsockopt(%d,TCP_KEEPIDLE, ) failed",new_fd);
-         }
-    retlen=sizeof(retalive);    
-
-       if(getsockopt(new_fd, IPPROTO_TCP, TCP_KEEPIDLE, &retalive, &retlen) < 0) {
-        flerror("getsockopt(%d,TCP_KEEPIDLE, ) failed",new_fd);
-         }
-//    else LOGGER("KEEPIDLE=%d\n",retalive);
-       const int keepintvl = 10;
-       if(setsockopt(new_fd, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(keepintvl)) < 0) {
-        flerror("setsockopt(%d,TCP_KEEPINTVL, ) failed",new_fd);
-         }
-    retlen=sizeof(retalive);    
-       if(getsockopt(new_fd, IPPROTO_TCP, TCP_KEEPINTVL, &retalive, &retlen) < 0) {
-        flerror("getsockopt(%d,TCP_KEEPINTVL, ) failed",new_fd);
-         }
-//    else LOGGER("KEEPINTVL=%d\n",retalive);
-     }
-
-// Create a TCP connection to host:port
-static int tcp_connect(const char *host, int port) {
-    struct addrinfo hints{ .ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM}, *res = nullptr;
-    char port_str[16];
-    snprintf(port_str, sizeof(port_str), "%d", port);
-    LOGGERHTTPS("tcp_connect(%s,%d)\n",host,port);
-    if(getaddrinfo(host, port_str, &hints, &res) != 0) {
-        lerrorHTTPS("getaddrinfo");
-        return -1;
-        }
-    destruct _{[res]{ freeaddrinfo(res);}};
-    LOGARHTTPS("Before socket");
-    int sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    LOGGERHTTPS("After socket sock=%d\n",sock);
-    if(sock < 0) {
-        lerrorHTTPS("socket");
-        return -1;
-       }
-    if(connect(sock, res->ai_addr, res->ai_addrlen) != 0) {
-        lerrorHTTPS("connect");
-        close(sock);
-        return -1;
-       }
-    sockopt(sock);
-    int flag = 1;
-    setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
-    return sock;
-    }
-
 #ifdef DLSYMS_SSL 
 #undef SSL_CTRL_SET_TLSEXT_HOSTNAME   
 
@@ -291,6 +235,7 @@ static int SSL_set_tlsext_host_name2(const SSL *s, const char *name) {
         if (!ctx) {
             LOGARHTTPSERROR("Failed to create SSL_CTX");
             error=true;
+            return;
             }
         error=!load_android_cacerts(ctx);
         SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, nullptr);
@@ -345,216 +290,331 @@ static const char *geterrorstring(int error) {
 }
 #endif
 
-static int SSLreadfull(SSL* ssl, char *dataptr,const int buflen) {
-    LOGGERHTTPS("start SSLreadfull %d\n", buflen);
-    int n=0;
-     for(int res;;n+=res) {
-        if(n>=buflen) {
-            LOGGERHTTPS("SSL_read all %d\n",n);
-            break;
-            }
-        res=SSL_read(ssl, dataptr+n,buflen-n);
-        if(res>0) {
-            LOGGERHTTPS("SSLread %d\n",res);
-            continue;
-            }
-        int err = SSL_get_error(ssl, res);
-        LOGGERHTTPS("SSL_read Error %d %s\n",err,geterrorstring(err));
-        if(err==SSL_ERROR_WANT_READ) {
-                res=0;
-                continue;
-                }
-        if (err == SSL_ERROR_SSL) {
-            unsigned long e = ERR_get_error();
-            constexpr const int maxbuf=200;
-            char buf[maxbuf];
-            ERR_error_string_n(e, buf, maxbuf);
-            LOGGERHTTPSERROR("SSL_read SSL_ERROR %s\n",buf);
-            }
-        else {
-            if(err == SSL_ERROR_SYSCALL) {
-                lerrorHTTPS("SSL_read syscall error");
-                }
-            }
-         break;
-        }
-    LOGGERHTTPS("end SSLreadfull %d\n",n);
-    return n;
+namespace {
+using HttpsClock = std::chrono::steady_clock;
+struct HttpsTrace {
+    unsigned long long id;
+    HttpsClock::time_point start = HttpsClock::now();
+    const char *stage = "validation";
+    HttpsTrace() {
+        static std::atomic<unsigned long long> sequence{0};
+        id = ++sequence;
     }
-    /*
-static int SSLwritefull(SSL* ssl, const char *dataptr,const int buflen) {
-    LOGGERHTTPS("start SSLwritefull %d",buflen);
-    int n=0;
-     for(int res;;n+=res) {
-        if(n>=buflen) {
-            LOGGERHTTPS("SSL_write all %d\n",buflen);
-            break;
-            }
-        res=SSL_write(ssl, dataptr+n,buflen-n);
-        if(res>0) {
-            LOGGERHTTPS("SSLwrite %.*s %d\n",res,dataptr+n,res);
-            continue;
-            }
-        int err = SSL_get_error(ssl, res);
-        LOGGERHTTPS("SSL_write Error %d %s\n",err,geterrorstring(err));
-        //int err = SSL_get_error(ssl, res);
-        if (err == SSL_ERROR_SSL) {
-            unsigned long e = ERR_get_error();
-            constexpr const int maxbuf=200;
-            char buf[maxbuf];
-            ERR_error_string_n(e, buf, maxbuf);
-            LOGGERHTTPS("SSL_read SSL_ERROR %s\n",buf);
-            }
-        else {
-            if(err == SSL_ERROR_SYSCALL) {
-                lerrorHTTPS("SSL_write syscall error");
-                }
-            }
-         break;
-        }
-    LOGGERHTTPS("end SSLwritefull %d\n",n);
-    return n;
+    long long elapsed() const {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(HttpsClock::now() - start)
+            .count();
     }
-*/
+    std::pair<std::vector<char>, int> fail(const char *reason) const {
+        LOGGERHTTPSERROR("request #%llu %s failed after %lld ms: %s\n", id, stage, elapsed(),
+                         reason);
+        return {{}, -1};
+    }
+};
+static void httpsClose(int fd) {
+    if (close(fd))
+        flerrorHTTPS("close socket %d", fd);
+}
+static bool httpsWait(int fd, short event, HttpsClock::time_point deadline,
+                      const HttpsTrace &trace) {
+    for (;;) {
+        auto left =
+            std::chrono::duration_cast<std::chrono::milliseconds>(deadline - HttpsClock::now())
+                .count();
+        if (left <= 0) {
+            LOGGERHTTPSERROR("request #%llu %s deadline reached\n", trace.id, trace.stage);
+            return false;
+        }
+        pollfd p{fd, event, 0};
+        int n = poll(&p, 1, static_cast<int>(left));
+        if (n < 0 && errno == EINTR)
+            continue;
+        if (n < 0) {
+            flerrorHTTPS("request #%llu %s poll", trace.id, trace.stage);
+            return false;
+        }
+        if (!n || (p.revents & (POLLNVAL | POLLERR))) {
+            LOGGERHTTPSERROR("request #%llu %s poll %s (events=0x%x)\n", trace.id, trace.stage,
+                             !n ? "timed out" : "socket error", static_cast<unsigned>(p.revents));
+            return false;
+        }
+        return true; // HUP is handled by the next TLS call.
+    }
+}
+static int httpsConnect(const std::string &host, int port, HttpsClock::time_point deadline,
+                        const HttpsTrace &trace) {
+    addrinfo hints{}, *addresses = nullptr;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_family = AF_UNSPEC;
+    const auto service = std::to_string(port);
+    int lookup = getaddrinfo(host.c_str(), service.c_str(), &hints, &addresses);
+    if (lookup) {
+        [[maybe_unused]] const int saved = errno;
+        LOGGERHTTPSERROR("request #%llu getaddrinfo: %s (%d), errno=%d\n", trace.id,
+                         gai_strerror(lookup), lookup, saved);
+        return -1;
+    }
+    destruct release{[addresses] { freeaddrinfo(addresses); }};
+    unsigned attempt = 0;
+    for (auto *a = addresses; a && HttpsClock::now() < deadline; a = a->ai_next) {
+        ++attempt;
+        int fd = socket(a->ai_family, SOCK_STREAM | SOCK_CLOEXEC, a->ai_protocol);
+        if (fd < 0) {
+            flerrorHTTPS("request #%llu socket attempt=%u family=%d", trace.id, attempt,
+                         a->ai_family);
+            continue;
+        }
+        if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
+            flerrorHTTPS("request #%llu fcntl O_NONBLOCK", trace.id);
+            httpsClose(fd);
+            continue;
+        }
+        int r = connect(fd, a->ai_addr, a->ai_addrlen);
+        if (r < 0 && errno == EINPROGRESS) {
+            if (httpsWait(fd, POLLOUT, deadline, trace)) {
+                int error = 0;
+                socklen_t len = sizeof(error);
+                if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len)) {
+                    flerrorHTTPS("request #%llu getsockopt SO_ERROR", trace.id);
+                } else if (error) {
+                    LOGGERHTTPSERROR("request #%llu connect attempt=%u: %s (%d)\n", trace.id,
+                                     attempt, strerror(error), error);
+                } else
+                    r = 0;
+            }
+        } else if (r < 0)
+            flerrorHTTPS("request #%llu connect attempt=%u", trace.id, attempt);
+        if (r == 0) {
+            LOGGERHTTPS("request #%llu connected fd=%d attempt=%u\n", trace.id, fd, attempt);
+            return fd;
+        }
+        httpsClose(fd);
+    }
+    LOGGERHTTPSERROR("request #%llu no TCP connection after %u address attempts\n", trace.id,
+                     attempt);
+    return -1;
+}
 
+#ifndef DLSYMS_SSL
+extern  "C" X509 *SSL_get1_peer_certificate(const SSL *ssl);
+#endif
+static bool httpsPeerName(SSL *ssl, const std::string &host) {
+#ifdef DLSYMS_SSL
+    using CheckHost = int (*)(X509 *, const char *, size_t, unsigned int, char **);
+    using CheckIp = int (*)(X509 *, const char *, unsigned int);
+    static auto hostCheck = reinterpret_cast<CheckHost>(dlsym(opencrypto(), "X509_check_host"));
+    static auto ipCheck = reinterpret_cast<CheckIp>(dlsym(opencrypto(), "X509_check_ip_asc"));
+    if (!SSL_get_peer_certificateptr || !X509_freeptr || !hostCheck || !ipCheck) {
+        LOGARHTTPSERROR("Peer-name verification functions unavailable");
+        return false;
+    }
+#else
+            auto hostCheck = X509_check_host;
+            auto ipCheck = X509_check_ip_asc;
+#define SSL_get_peer_certificate SSL_get1_peer_certificate 
 
-
-static void shutdowner(int sock,SSL* ssl) {
-   int flag = 1;
-   setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
-/*   struct linger l = { .l_onoff = 0, .l_linger = 0 };
-   setsockopt(sock, SOL_SOCKET, SO_LINGER, &l, sizeof(l)); */
-  for(int i=0;i<10;++i) { 
-       int outq = 0;
-        if(ioctl(sock, TIOCOUTQ, &outq) == 0) {
-            LOGGERHTTPS("SIOCOUTQ = %d bytes\n", outq);
-            if(outq==0)
+#endif
+    X509 *cert = SSL_get_peer_certificate(ssl);
+    if (!cert) {
+        LOGARHTTPSERROR("Peer certificate absent");
+        return false;
+    }
+    destruct release{[cert] { X509_free(cert); }};
+    unsigned char ip[16];
+    bool numeric =
+        inet_pton(AF_INET, host.c_str(), ip) == 1 || inet_pton(AF_INET6, host.c_str(), ip) == 1;
+    return numeric ? ipCheck(cert, host.c_str(), 0) == 1
+                   : hostCheck(cert, host.c_str(), host.size(), 0, nullptr) == 1;
+}
+} // namespace
+std::pair<std::vector<char>, int> ContextHTTPS::request(const std::string_view host, int port,
+                                                        const std::string_view path,
+                                                        const std::string_view TYPE,
+                                                        const std::span<const char> input,
+                                                        const std::string_view header,
+                                                        std::string *location,
+                                                        const HttpsClientIdentity *client) {
+    HttpsTrace trace;
+    if (location)
+        location->clear();
+    try {
+        if (error || !ctx)
+            return trace.fail("TLS context unavailable");
+        if (host.empty() || host.size() > 253 ||
+            host.find_first_not_of(
+                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_:") != host.npos)
+            return trace.fail("Invalid host");
+        if (port < 1 || port > 65535)
+            return trace.fail("Invalid port");
+        if (path.empty() || path.front() != '/' ||
+            std::any_of(path.begin(), path.end(),
+                        [](unsigned char c) { return c <= 32 || c == 127; }))
+            return trace.fail("Invalid request path");
+        if (TYPE.empty() || TYPE.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ") != TYPE.npos)
+            return trace.fail("Invalid HTTP method");
+        if (input.size() > 8 * 1024 * 1024)
+            return trace.fail("Request body exceeds 8 MiB");
+        if (header.find("\r\n\r\n") != header.npos ||
+            (!header.empty() && !header.starts_with("\r\n")))
+            return trace.fail("Invalid request header framing");
+        // One start/end pair per request; never log query strings, headers or bodies.
+        [[maybe_unused]] auto logPath = path.substr(0, path.find_first_of("?#"));
+        LOGGER("HTTPS: request #%llu %.*s %.*s:%d %.*s (%zu body bytes)\n", trace.id,
+               static_cast<int>(std::min<size_t>(TYPE.size(), 20)), TYPE.data(),
+               static_cast<int>(host.size()), host.data(), port,
+               static_cast<int>(std::min<size_t>(logPath.size(), 180)), logPath.data(),
+               input.size());
+        const std::string hostname(host);
+        const auto deadline = trace.start + std::chrono::seconds(45);
+        trace.stage = "TCP connect";
+        int sock = httpsConnect(hostname, port, deadline, trace);
+        if (sock < 0)
+            return trace.fail("Cannot connect");
+        // Socket ownership begins before SSL_new (including exception paths).
+        destruct socketRelease{[sock] { httpsClose(sock); }};
+        trace.stage = "TLS setup";
+        SSL *ssl = SSL_new(ctx);
+        if (!ssl)
+            return trace.fail("SSL_new");
+        destruct release{[ssl] { SSL_free(ssl); }};
+        if (client) {
+            trace.stage = "TLS client identity";
+            if (!client->certificate || !client->privateKey || !client->issuer)
+                return trace.fail("Incomplete client certificate identity");
+#ifdef DLSYMS_SSL
+            static auto useCert = reinterpret_cast<int (*)(SSL *, X509 *)>(
+                dlsym(openssl(), "SSL_use_certificate"));
+            static auto useKey = reinterpret_cast<int (*)(SSL *, EVP_PKEY *)>(
+                dlsym(openssl(), "SSL_use_PrivateKey"));
+            static auto checkKey = reinterpret_cast<int (*)(const SSL *)>(
+                dlsym(openssl(), "SSL_check_private_key"));
+            static auto addChain = reinterpret_cast<int (*)(SSL *, X509 *)>(
+                dlsym(openssl(), "SSL_add1_chain_cert"));
+            if (!useCert || !useKey || !checkKey || (!addChain && !SSL_ctrlptr))
+                return trace.fail("Client certificate TLS functions unavailable");
+#else
+            auto useCert = SSL_use_certificate;
+            auto useKey = SSL_use_PrivateKey;
+            auto checkKey = SSL_check_private_key;
+            auto addChain = [](SSL *s, X509 *cert) { return SSL_add1_chain_cert(s, cert); };
+#endif
+            if (useCert(ssl, client->certificate) != 1)
+                return trace.fail("SSL_use_certificate");
+            if (useKey(ssl, client->privateKey) != 1 || checkKey(ssl) != 1)
+                return trace.fail("Client certificate/private key mismatch");
+#ifdef DLSYMS_SSL
+            const auto added = addChain ? addChain(ssl, client->issuer)
+                                        : SSL_ctrl(ssl, SSL_CTRL_CHAIN_CERT, 1, client->issuer);
+#else
+            const auto added = addChain(ssl, client->issuer);
+#endif
+            if (added != 1)
+                return trace.fail("Cannot add client certificate issuer");
+            LOGGER("HTTPS: request #%llu client certificate and key installed for this connection\n",
+                   trace.id);
+        }
+        trace.stage = "TLS setup";
+        if (SSL_set_fd(ssl, sock) != 1)
+            return trace.fail("SSL_set_fd");
+        if (SSL_set_tlsext_host_name2(ssl, hostname.c_str()) != 1)
+            return trace.fail("SSL_set_tlsext_host_name");
+        auto again = [&](int e, int savedErrno) {
+            if (e == SSL_ERROR_WANT_READ || e == SSL_ERROR_WANT_WRITE)
+                return httpsWait(sock, e == SSL_ERROR_WANT_READ ? POLLIN : POLLOUT, deadline,
+                                 trace);
+            LOGGERHTTPSERROR("request #%llu %s: %s (%d), errno=%d (%s)\n", trace.id, trace.stage,
+                             geterrorstring(e), e, savedErrno, strerror(savedErrno));
+            auto detail = get_openssl_error_string();
+            if (!detail.empty())
+                LOGGERHTTPSERROR("request #%llu TLS: %s\n", trace.id, detail.c_str());
+            return false;
+        };
+        trace.stage = "TLS handshake";
+        for (;;) {
+            if (HttpsClock::now() >= deadline)
+                return trace.fail("Handshake deadline reached");
+            errno = 0;
+            int r = SSL_connect(ssl), saved = errno;
+            if (r == 1)
                 break;
-            }
-        else {
-            flerrorHTTPS("ioctl(sock, TIOCOUTQ, &outq)): ");
-            break;
-            }
-       
-        usleep(500000);
+            if (!again(SSL_get_error(ssl, r), saved))
+                return trace.fail("SSL_connect");
         }
-    /*
-    struct tcp_info ti;
-    socklen_t len = sizeof(ti);
-    if(getsockopt(sock, IPPROTO_TCP, TCP_INFO, &ti, &len) == 0) {
-        LOGGERHTTPS("tcpi_state=%u tcpi_retransmits=%u tcpi_rto=%u tcpi_snd_mss=%u tcpi_rtt=%u\n",ti.tcpi_state, ti.tcpi_retransmits, ti.tcpi_rto, ti.tcpi_snd_mss, ti.tcpi_rtt);
-        } */
-   for(int i=0;i<5;++i) {
-       int res=SSL_shutdown(ssl);
-       LOGGERHTTPS("SSL_shutdown=%d\n",res);
-       if(res) {
-           if(res==-1) {
-                unsigned long err;
-                while ((err = ERR_get_error()) != 0) {
-                    char buf[256];
-                    ERR_error_string_n(err, buf, sizeof(buf));
-                    LOGGERHTTPSERROR("OpenSSL error: %s (0x%lx)\n", buf, err);
-                    }
+        long verify = SSL_get_verify_result(ssl);
+        if (verify != X509_V_OK) {
+            LOGGERHTTPSERROR("request #%llu certificate chain verification code=%ld\n", trace.id,
+                             verify);
+            return trace.fail("Certificate chain rejected");
+        }
+        if (!httpsPeerName(ssl, hostname))
+            return trace.fail("Certificate host name rejected");
+        LOGGERHTTPS("request #%llu TLS handshake and peer verification complete\n", trace.id);
+        std::string request = std::string(TYPE) + " " + std::string(path) +
+                              " HTTP/1.1\r\nHost: " + hostname +
+                              (port == 443 ? "" : ":" + std::to_string(port)) +
+                              "\r\nContent-Length: " + std::to_string(input.size()) +
+                              std::string(header) + "\r\nConnection: close\r\n\r\n";
+        if (!input.empty())
+            request.append(input.data(), input.size());
+        trace.stage = "TLS write";
+        for (size_t at = 0; at < request.size();) {
+            if (HttpsClock::now() >= deadline)
+                return trace.fail("Write deadline reached");
+            errno = 0;
+            int r = SSL_write(ssl, request.data() + at, request.size() - at), saved = errno;
+            if (r > 0)
+                at += r;
+            else if (!again(SSL_get_error(ssl, r), saved))
+                return trace.fail("SSL_write");
+        }
+        LOGGERHTTPS("request #%llu wrote %zu bytes\n", trace.id, request.size());
+        std::string raw;
+        trace.stage = "TLS read";
+        for (;;) {
+            if (HttpsClock::now() >= deadline)
+                return trace.fail("Read deadline reached");
+            char buf[16384];
+            errno = 0;
+            int n = SSL_read(ssl, buf, sizeof(buf)), saved = errno;
+            bool eof = false;
+            if (n > 0)
+                raw.append(buf, n);
+            else {
+                int e = SSL_get_error(ssl, n);
+                if (e == SSL_ERROR_ZERO_RETURN)
+                    eof = true;
+                else if (again(e, saved))
+                    continue;
+                else
+                    return trace.fail("SSL_read");
+            }
+            auto response = juggluco_http::parse(raw, eof);
+            if (response.complete) {
+                LOGGER("HTTPS: request #%llu complete HTTP %d, %zu body bytes, %lld ms\n", trace.id,
+                       response.status, response.body.size(), trace.elapsed());
+                if (response.status >= 400)
+                    LOGGERHTTPSERROR("request #%llu server returned HTTP %d\n", trace.id,
+                                     response.status);
+                if (response.status == 307 || response.status == 308) {
+                    LOGGER("HTTPS: request #%llu redirect Location %s\n", trace.id,
+                           response.location.empty() ? "missing" : "present");
                 }
-             break;
-             }
-         usleep(1000*500);
-         }
-      }
-
-std::pair<std::vector<char>,int> ContextHTTPS::request(const std::string_view host,int port,const std::string_view path,const std::string_view TYPE,const std::span<const char> input, const std::string_view header) {
-    std::vector<char> uit;   
-    if(error) {
-        LOGARHTTPSERROR("request error=true");
-        return {uit,-1};
-        }
-    int sock = tcp_connect(host.data(), port);
-    if(sock < 0) {
-        return {uit,-1};
-       }
-    SSL* ssl = SSL_new(ctx);
-    LOGGERHTTPS("after SSL_new(ctx)=%p\n",ssl);
-
-    destruct _{[ssl,sock]{ 
-       shutdowner(sock,ssl);
-       shutdown(sock,SHUT_RDWR);
-       close(sock);
-       SSL_free(ssl);
-       LOGGERHTTPS("close(%d)\n",sock);
-        }};
-    SSL_set_fd(ssl, sock);
-    SSL_set_tlsext_host_name2(ssl, host.data());  // SNI
-
-    LOGARHTTPS("before SSL_connect");
-    auto conres=SSL_connect(ssl);
-    LOGGERHTTPS("after SSL_connect conres=%d\n",conres);
-    if(conres != 1) {
-       const std:: string mess=get_openssl_error_string();
-       LOGGERHTTPSERROR("SSL handshake failed: %s\n", mess.c_str());
-        return {uit,-1};
-       }
-    long verify_result = SSL_get_verify_result(ssl);
-    if (verify_result != X509_V_OK) {
-       LOGGERHTTPSERROR("Certificate verification failed: %s\n", X509_verify_cert_error_string(verify_result)); 
-    }; 
-    const char closebuf[]{"\r\nConnection: close\r\n\r\n"};
-    strsepconcat req {""sv,TYPE , " "sv,path," HTTP/1.1\r\nHost: "sv , host , "\r\nContent-Length: "sv,std::to_string(input.size()), header,closebuf};
-
-    LOGGERHTTPS("connect %.*s %.*s\n",TYPE.size(),TYPE.data(),path.size(),path.data());
-    const char *request=req.data();
-   int requestsize=req.size();
-    const int maxdata=  std::max((int)(input.size()+requestsize),16*1024);
-    Mmap<char> data(maxdata);
-    char *dataptr=data.data();
-    memcpy(dataptr,request,requestsize);
-    if(input.size()>0) {
-        memcpy(dataptr+requestsize, input.data(), input.size());
-        requestsize+=input.size();
-       }
-   SSL_write(ssl, dataptr, requestsize);
-   SSL_write(ssl, "", 0);
-   LOGGERHTTPS("after SSL_write %d\n", requestsize);
-   int n=SSL_read(ssl, dataptr,maxdata);
-   LOGGERHTTPS("after SSL_read=%d\n", n);
-   char *enddata=dataptr+n;
-   int   status_code=-1;
-   char *startpos;
-   if((startpos=std::find(dataptr,enddata,' '))!=enddata) {
-        int end=sscanf(++startpos,"%d",&status_code);
-        startpos+=end;
-        }
-    else {
-        //error=true;
-        LOGGERHTTPSERROR("no space in #%s# len=%d\n",dataptr,n);
-        return {uit,-1};
-        }
-    LOGGERHTTPS("Status Code=%d\n",status_code);
-    char zoek[]="\r\n\r\n";
-    if(char *hit=std::search(startpos,enddata,zoek,zoek+sizeof(zoek)-1);hit!=enddata) {
-        hit+=sizeof(zoek)-1;
-        int len= enddata-hit;
-        uit.reserve(len);
-        #ifdef __cpp_lib_containers_ranges
-        uit.append_range(std::span<char>(hit,len));
-        #else
-            uit.insert(uit.end(), hit, hit+len);
-        #endif
-        if(n==maxdata) {
-            do {
-                int n=SSLreadfull(ssl, dataptr,maxdata);
-                if(n<=0)
-                    break;
-                uit.reserve(uit.capacity()+n);
-        #ifdef __cpp_lib_containers_ranges
-                uit.append_range(std::span<char>(dataptr,n));
-                #else
-                  uit.insert(uit.end(), dataptr, dataptr+n);
-                  #endif
-                } while(n==maxdata);
+                if (location)
+                    *location = std::move(response.location);
+                return {std::move(response.body), response.status};
             }
         }
-    return {uit,status_code};
+    } catch (const juggluco_http::ParseError &e) {
+        return trace.fail(e.what());
+    } catch (const std::bad_alloc &) {
+        return trace.fail("Caught allocation failure");
+    } catch (const std::exception &) {
+        LOGGERHTTPSERROR("request #%llu caught std::exception (contents omitted)\n", trace.id);
+        return trace.fail("Exception while performing request");
+    } catch (...) {
+        return trace.fail("Unknown exception while performing request");
     }
+}
+
 #ifdef MAIN
 int main() {
   ContextHTTPS context;
